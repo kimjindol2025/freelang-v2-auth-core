@@ -13,7 +13,7 @@ describe('Auto Header Engine', () => {
     expect(result?.fn).toBe('sum');
     expect(result?.input).toBe('array<number>');
     expect(result?.output).toBe('number');
-    expect(result?.confidence).toBeGreaterThanOrEqual(90);
+    expect(result?.confidence).toBeGreaterThanOrEqual(0.9);
   });
 
   test('exact match: average', () => {
@@ -25,7 +25,7 @@ describe('Auto Header Engine', () => {
   test('multi-token: array sum', () => {
     const result = engine.generate('array sum');
     expect(result?.fn).toBe('sum');
-    expect(result?.confidence).toBeGreaterThanOrEqual(90);
+    expect(result?.confidence).toBeGreaterThanOrEqual(0.9);
   });
 
   test('variant: add (synonym for sum)', () => {
@@ -54,7 +54,7 @@ describe('Auto Header Engine', () => {
   test('fuzzy match: avg (variant)', () => {
     const result = engine.generate('avg');
     expect(result?.fn).toBe('average');
-    expect(result?.confidence).toBeGreaterThanOrEqual(90);
+    expect(result?.confidence).toBeGreaterThanOrEqual(0.9);
   });
 
   test('partial match: sort', () => {

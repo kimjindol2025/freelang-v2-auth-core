@@ -15,7 +15,7 @@ describe('Pipeline - Complete AI Flow', () => {
 
     expect(result).not.toBeNull();
     expect(result!.header.fn).toBe('sum');
-    expect(result!.header.confidence).toBeGreaterThanOrEqual(90);
+    expect(result!.header.confidence).toBeGreaterThanOrEqual(0.9);
     expect(result!.vm.ok).toBe(true);
     expect(result!.final_value).toBe(15);
     expect(result!.vm.cycles).toBeGreaterThan(0);
@@ -170,7 +170,7 @@ describe('Pipeline - Complete AI Flow', () => {
     expect(quick.op).toBe('sum');
     expect(quick.data).toEqual([1, 2, 3, 4]);
     expect(quick.result).toBe(10);
-    expect(quick.confidence).toBeGreaterThanOrEqual(90);
+    expect(quick.confidence).toBeGreaterThanOrEqual(0.9);
   });
 
   test('pipeline with variant keyword', () => {

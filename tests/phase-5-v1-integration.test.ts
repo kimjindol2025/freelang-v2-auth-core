@@ -166,7 +166,7 @@ intent: "배열 합산"`;
       expect(proposal.fn).toBe('sum');
       expect(proposal.input).toBe('array<number>');
       expect(proposal.output).toBe('number');
-      expect(proposal.confidence).toBe(98); // v1 파서이므로 매우 높음
+      expect(proposal.confidence).toBe(0.98); // v1 파서이므로 매우 높음
     });
 
     test('동작 추론: intent에서', () => {
@@ -208,7 +208,7 @@ intent: "메모리 효율적 필터링"`;
       const ast = parseMinimalFunction(buffer);
       const proposal = astToProposal(ast);
 
-      expect(proposal.directive).toBe('memory_efficient');
+      expect(proposal.directive).toBe('memory');
     });
 
     test('지시어 추론: 안전성', () => {
@@ -265,7 +265,7 @@ intent: "배열의 모든 요소 합산"`;
       // 3. 브릿지
       const proposal = astToProposal(ast);
       expect(proposal.fn).toBe('sum');
-      expect(proposal.confidence).toBe(98);
+      expect(proposal.confidence).toBe(0.98);
 
       // 4. 파이프라인 준비
       expect(proposal.input).toBe('array<number>');
@@ -285,7 +285,7 @@ intent: "배열 요소의 평균값 계산"`;
       const proposal = astToProposal(ast);
 
       expect(proposal.fn).toBe('average');
-      expect(proposal.confidence).toBe(98);
+      expect(proposal.confidence).toBe(0.98);
       expect(proposal.output).toBe('number');
     });
 
@@ -301,7 +301,7 @@ intent: "메모리 효율적 필터 구현"`;
       const proposal = astToProposal(ast);
 
       expect(proposal.fn).toBe('filter');
-      expect(proposal.directive).toBe('memory_efficient');
+      expect(proposal.directive).toBe('memory');
       expect(proposal.input).toBe('array<number>');
       expect(proposal.output).toBe('array<number>');
     });

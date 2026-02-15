@@ -1,16 +1,16 @@
 // FreeLang v2 - Auto Header Engine
 // Converts free-form input to structured headers for IR generation
 
-import { patterns, keywordToOp } from './patterns';
+import { patterns, keywordToOp, Directive } from './patterns';
 
 export interface HeaderProposal {
   fn: string;                    // function name
   input: string;                 // input type
   output: string;                // output type
   reason: string;                // business rationale
-  directive: string;             // optimization hint
+  directive: Directive;          // optimization hint (speed | memory | safety)
   complexity: string;            // time complexity
-  confidence: number;            // 0-100
+  confidence: number;            // 0.0-1.0 (normalized)
   matched_op: string;            // which pattern was matched
 }
 
@@ -61,7 +61,7 @@ export class AutoHeaderEngine {
       const op = keywordToOp[token];
       if (op) {
         // Exact match = high confidence
-        bestMatch = { op, confidence: 95 };
+        bestMatch = { op, confidence: 0.95 };
         break;
       }
     }
@@ -71,7 +71,7 @@ export class AutoHeaderEngine {
       for (const token of tokens) {
         for (const [keyword, op] of Object.entries(keywordToOp)) {
           if (token.includes(keyword) || keyword.includes(token)) {
-            bestMatch = { op, confidence: 70 };
+            bestMatch = { op, confidence: 0.70 };
             break;
           }
         }
@@ -84,7 +84,7 @@ export class AutoHeaderEngine {
       for (const patternOp of Object.keys(patterns)) {
         for (const token of tokens) {
           if (this.fuzzyMatch(token, patternOp) > 0.7) {
-            bestMatch = { op: patternOp, confidence: 50 };
+            bestMatch = { op: patternOp, confidence: 0.50 };
             break;
           }
         }

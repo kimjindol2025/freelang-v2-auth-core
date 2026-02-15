@@ -13,9 +13,9 @@ export class LibraryResolver {
   /**
    * directive에 따라 필요한 라이브러리 결정
    *
-   * directive: "memory_efficient" → stdlib.h만
-   * directive: "speed" → math.h, stdio.h
-   * directive: "safety" → stdlib.h, assert.h
+   * directive: "memory" → stdlib.h만 (최소 의존성)
+   * directive: "speed" → math.h, stdio.h (성능 최적화)
+   * directive: "safety" → assert.h, errno.h (안전성 검사)
    */
   resolveFromDirective(directive: string): LibraryProfile {
     const profile: LibraryProfile = {
@@ -24,8 +24,8 @@ export class LibraryResolver {
     };
 
     switch (directive) {
-      case 'memory_efficient':
-        // 최소 의존성
+      case 'memory':
+        // 최소 의존성 (메모리 효율)
         profile.headers.clear();
         profile.headers.add('stdlib.h');
         break;
@@ -38,12 +38,11 @@ export class LibraryResolver {
         break;
 
       case 'safety':
-        // 검증 함수 추가 (안전성)
+        // 검증 함수 추가 (안전성 우선)
         profile.headers.add('assert.h');
         profile.headers.add('errno.h');
         break;
 
-      case 'standard':
       default:
         // 기본: stdio, stdlib만
         profile.headers.add('stdio.h');
@@ -108,13 +107,14 @@ export class LibraryResolver {
 
   /**
    * 모든 directive 조합 생성 (테스트용)
+   *
+   * 현재 지원하는 directive: memory, speed, safety
    */
   getAllProfiles(): Record<string, LibraryProfile> {
     return {
-      memory_efficient: this.resolveFromDirective('memory_efficient'),
+      memory: this.resolveFromDirective('memory'),
       speed: this.resolveFromDirective('speed'),
       safety: this.resolveFromDirective('safety'),
-      standard: this.resolveFromDirective('standard'),
     };
   }
 }

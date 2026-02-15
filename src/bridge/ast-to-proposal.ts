@@ -7,6 +7,7 @@
  */
 import { MinimalFunctionAST } from '../parser/ast';
 import { HeaderProposal } from '../engine/auto-header';
+import { Directive } from '../engine/patterns';
 
 /**
  * AST를 HeaderProposal로 변환
@@ -16,7 +17,7 @@ import { HeaderProposal } from '../engine/auto-header';
  */
 export function astToProposal(ast: MinimalFunctionAST): HeaderProposal {
   // .free 파일은 explicit 선언이므로 매우 높은 신뢰도
-  const confidence = 98; // v1 파서로 명확하게 구문 분석됨
+  const confidence = 0.98; // v1 파서로 명확하게 구문 분석됨 (0.0-1.0 범위)
 
   // matched_op 추론: intent에서 동작 키워드 찾기
   const matched_op = inferOperation(ast.intent || '', ast.fnName);
@@ -89,12 +90,12 @@ function inferOperation(intent: string, fnName: string): string {
 /**
  * 지시어 추론 (intent에서 최적화 힌트 찾기)
  *
- * "배열 합산" → "standard"
+ * "배열 합산" → "memory" (기본값)
  * "빠른 정렬" → "speed"
- * "메모리 효율적 필터링" → "memory_efficient"
+ * "메모리 효율적 필터링" → "memory"
  * "안전한 검사" → "safety"
  */
-function inferDirective(intent: string): string {
+function inferDirective(intent: string): Directive {
   const intentLower = intent.toLowerCase();
 
   if (
@@ -112,7 +113,7 @@ function inferDirective(intent: string): string {
     intentLower.includes('memory') ||
     intentLower.includes('efficient')
   ) {
-    return 'memory_efficient';
+    return 'memory';
   }
 
   if (
@@ -124,8 +125,8 @@ function inferDirective(intent: string): string {
     return 'safety';
   }
 
-  // 기본값
-  return 'standard';
+  // 기본값: memory (효율성 우선)
+  return 'memory';
 }
 
 /**

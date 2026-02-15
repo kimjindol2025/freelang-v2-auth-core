@@ -21,9 +21,9 @@ export class CodeGen {
       input: intent.params.length > 0 ? intent.params[0].type : 'void',
       output: intent.ret,
       reason: 'Generated code',
-      directive: 'standard', // default directive, can be overridden by HeaderProposal
+      directive: 'memory', // default directive (speed | memory | safety)
       complexity: 'O(n)',
-      confidence: 100,
+      confidence: 0.95, // 0.0-1.0 범위
       matched_op: intent.fn,
     });
 
@@ -38,7 +38,12 @@ export class CodeGen {
 
     // Function signature
     const retC = this.typeToC(intent.ret);
-    const paramsC = intent.params.map(p => `${this.typeToC(p.type)} ${p.name}${p.type === 'array' ? ', int ' + p.name + '_len' : ''}`).join(', ');
+    const paramsC = intent.params
+      .map(p => {
+        const isArray = p.type.startsWith('array<');
+        return `${this.typeToC(p.type)} ${p.name}${isArray ? `, int ${p.name}_len` : ''}`;
+      })
+      .join(', ');
     lines.push(`${retC} ${intent.fn}(${paramsC || 'void'}) {`);
 
     // Local vars

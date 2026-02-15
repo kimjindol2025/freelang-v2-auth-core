@@ -97,7 +97,7 @@ describe('FreeLang E2E', () => {
       ],
     };
     const c = fl.toC(intent);
-    expect(c).toContain('#include <stdio.h>');
+    expect(c).toContain('#include <stdlib.h>');
     expect(c).toContain('double sum(');
     expect(c).toContain('for');
     expect(c).toContain('_s +=');

@@ -2,12 +2,20 @@
 // Machine-readable patterns for header generation
 // (No human-facing keywords - just operation definitions)
 
+/**
+ * Global Directive Types (통일된 3가지)
+ * - speed: 성능 우선 (SIMD 힌트, 빠른 알고리즘)
+ * - memory: 메모리 효율 (스택 할당, 제약된 환경)
+ * - safety: 안전성 우선 (검사 포함, 에러 처리)
+ */
+export type Directive = 'speed' | 'memory' | 'safety';
+
 export interface OpPattern {
   op: string;           // operation name: "sum", "avg", "max", etc
   input: string;        // "array<number>"
   output: string;       // "number" or "array<number>"
   reason: string;       // business rationale (machine readable)
-  directive: string;    // optimization hint
+  directive: Directive; // optimization hint (speed | memory | safety)
   complexity: string;   // O(n), O(n^2), etc
 }
 
@@ -17,7 +25,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'number',
     reason: 'statistical_operation',
-    directive: 'memory_efficient',
+    directive: 'memory',
     complexity: 'O(n)',
   },
   average: {
@@ -25,7 +33,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'number',
     reason: 'data_analysis',
-    directive: 'accuracy_first',
+    directive: 'speed',
     complexity: 'O(n)',
   },
   max: {
@@ -33,7 +41,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'number',
     reason: 'optimization_problem',
-    directive: 'single_pass',
+    directive: 'speed',
     complexity: 'O(n)',
   },
   min: {
@@ -41,7 +49,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'number',
     reason: 'search_algorithm',
-    directive: 'single_pass',
+    directive: 'speed',
     complexity: 'O(n)',
   },
   filter: {
@@ -49,7 +57,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'array<number>',
     reason: 'data_preprocessing',
-    directive: 'predicate_based',
+    directive: 'memory',
     complexity: 'O(n)',
   },
   sort: {
@@ -57,7 +65,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'array<number>',
     reason: 'sorting_algorithm',
-    directive: 'in_place',
+    directive: 'speed',
     complexity: 'O(n*log(n))',
   },
   reverse: {
@@ -65,7 +73,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'array<number>',
     reason: 'array_manipulation',
-    directive: 'in_place',
+    directive: 'memory',
     complexity: 'O(n)',
   },
   count: {
@@ -73,7 +81,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'number',
     reason: 'cardinality_measure',
-    directive: 'fast_lookup',
+    directive: 'speed',
     complexity: 'O(1)',
   },
   length: {
@@ -81,7 +89,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'number',
     reason: 'size_measurement',
-    directive: 'fast_lookup',
+    directive: 'speed',
     complexity: 'O(1)',
   },
   find: {
@@ -89,7 +97,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'number',
     reason: 'search_operation',
-    directive: 'early_exit',
+    directive: 'speed',
     complexity: 'O(n)',
   },
   contains: {
@@ -97,7 +105,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'boolean',
     reason: 'membership_test',
-    directive: 'early_exit',
+    directive: 'speed',
     complexity: 'O(n)',
   },
   map: {
@@ -105,7 +113,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'array<number>',
     reason: 'element_transformation',
-    directive: 'functional',
+    directive: 'memory',
     complexity: 'O(n)',
   },
   unique: {
@@ -113,7 +121,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<number>',
     output: 'array<number>',
     reason: 'deduplication',
-    directive: 'hash_based',
+    directive: 'speed',
     complexity: 'O(n)',
   },
   flatten: {
@@ -121,7 +129,7 @@ export const patterns: Record<string, OpPattern> = {
     input: 'array<array<number>>',
     output: 'array<number>',
     reason: 'dimension_reduction',
-    directive: 'recursive',
+    directive: 'memory',
     complexity: 'O(n)',
   },
 };

@@ -13,8 +13,8 @@ describe('LibraryResolver', () => {
     resolver = new LibraryResolver();
   });
 
-  test('resolveFromDirective: memory_efficient', () => {
-    const profile = resolver.resolveFromDirective('memory_efficient');
+  test('resolveFromDirective: memory', () => {
+    const profile = resolver.resolveFromDirective('memory');
     expect(profile.headers.has('stdlib.h')).toBe(true);
     expect(profile.headers.has('stdio.h')).toBe(false);
     expect(profile.linkerFlags.size).toBe(0);
@@ -35,8 +35,8 @@ describe('LibraryResolver', () => {
     expect(profile.headers.has('stdlib.h')).toBe(true);
   });
 
-  test('resolveFromDirective: standard', () => {
-    const profile = resolver.resolveFromDirective('standard');
+  test('resolveFromDirective: unknown defaults to memory+stdio', () => {
+    const profile = resolver.resolveFromDirective('unknown');
     expect(profile.headers.has('stdio.h')).toBe(true);
     expect(profile.headers.has('stdlib.h')).toBe(true);
     expect(profile.headers.size).toBe(2);
@@ -54,9 +54,9 @@ describe('LibraryResolver', () => {
       input: 'array<number>',
       output: 'number',
       reason: 'Array summation',
-      directive: 'standard',
+      directive: 'memory',
       complexity: 'O(n)',
-      confidence: 95,
+      confidence: 0.95,
       matched_op: 'sum',
     };
     const profile = resolver.resolveFromHeader(header);
@@ -69,9 +69,9 @@ describe('LibraryResolver', () => {
       input: 'number',
       output: 'number',
       reason: 'Square root',
-      directive: 'standard',
+      directive: 'speed',
       complexity: 'O(1)',
-      confidence: 95,
+      confidence: 0.95,
       matched_op: 'sqrt',
     };
     const profile = resolver.resolveFromHeader(header);
@@ -87,9 +87,9 @@ describe('LibraryResolver', () => {
         input: 'number',
         output: 'number',
         reason: 'Math operation',
-        directive: 'standard',
+        directive: 'speed',
         complexity: 'O(1)',
-        confidence: 95,
+        confidence: 0.95,
         matched_op: op,
       };
       const profile = resolver.resolveFromHeader(header);
@@ -121,21 +121,19 @@ describe('LibraryResolver', () => {
 
   test('getAllProfiles returns all directives', () => {
     const profiles = resolver.getAllProfiles();
-    expect(profiles).toHaveProperty('memory_efficient');
+    expect(profiles).toHaveProperty('memory');
     expect(profiles).toHaveProperty('speed');
     expect(profiles).toHaveProperty('safety');
-    expect(profiles).toHaveProperty('standard');
   });
 
   test('getAllProfiles: each profile is unique', () => {
     const profiles = resolver.getAllProfiles();
-    const memory_eff = JSON.stringify(Array.from(profiles.memory_efficient.headers).sort());
+    const memory = JSON.stringify(Array.from(profiles.memory.headers).sort());
     const speed = JSON.stringify(Array.from(profiles.speed.headers).sort());
     const safety = JSON.stringify(Array.from(profiles.safety.headers).sort());
-    const standard = JSON.stringify(Array.from(profiles.standard.headers).sort());
 
-    const unique = new Set([memory_eff, speed, safety, standard]);
-    expect(unique.size).toBe(4);
+    const unique = new Set([memory, speed, safety]);
+    expect(unique.size).toBe(3);
   });
 });
 
@@ -149,21 +147,21 @@ describe('LibraryLearner', () => {
   });
 
   test('record: saves usage entry', () => {
-    const profile = resolver.resolveFromDirective('standard');
-    learner.record('standard', profile, ['sum', 'average']);
+    const profile = resolver.resolveFromDirective('memory');
+    learner.record('memory', profile, ['sum', 'average']);
 
     const history = learner.getHistory();
     expect(history.length).toBe(1);
-    expect(history[0].directive).toBe('standard');
+    expect(history[0].directive).toBe('memory');
     expect(history[0].builtins_used).toContain('sum');
     expect(history[0].builtins_used).toContain('average');
   });
 
   test('record: multiple entries accumulated', () => {
-    const profile1 = resolver.resolveFromDirective('memory_efficient');
+    const profile1 = resolver.resolveFromDirective('memory');
     const profile2 = resolver.resolveFromDirective('speed');
 
-    learner.record('memory_efficient', profile1, ['sum']);
+    learner.record('memory', profile1, ['sum']);
     learner.record('speed', profile2, ['sqrt', 'floor']);
 
     const history = learner.getHistory();
@@ -171,13 +169,13 @@ describe('LibraryLearner', () => {
   });
 
   test('getCommonPatterns: identifies most used header combinations', () => {
-    const memProfile = resolver.resolveFromDirective('memory_efficient');
+    const memProfile = resolver.resolveFromDirective('memory');
     const speedProfile = resolver.resolveFromDirective('speed');
 
-    // Record memory_efficient 3 times, speed 2 times
-    learner.record('memory_efficient', memProfile, []);
-    learner.record('memory_efficient', memProfile, []);
-    learner.record('memory_efficient', memProfile, []);
+    // Record memory 3 times, speed 2 times
+    learner.record('memory', memProfile, []);
+    learner.record('memory', memProfile, []);
+    learner.record('memory', memProfile, []);
     learner.record('speed', speedProfile, []);
     learner.record('speed', speedProfile, []);
 
@@ -190,8 +188,8 @@ describe('LibraryLearner', () => {
   });
 
   test('getHistory: returns copy of history', () => {
-    const profile = resolver.resolveFromDirective('standard');
-    learner.record('standard', profile, ['sum']);
+    const profile = resolver.resolveFromDirective('memory');
+    learner.record('memory', profile, ['sum']);
 
     const history1 = learner.getHistory();
     const history2 = learner.getHistory();
@@ -201,9 +199,9 @@ describe('LibraryLearner', () => {
   });
 
   test('record: includes timestamp', () => {
-    const profile = resolver.resolveFromDirective('standard');
+    const profile = resolver.resolveFromDirective('memory');
     const beforeTime = Date.now();
-    learner.record('standard', profile, []);
+    learner.record('memory', profile, []);
     const afterTime = Date.now();
 
     const history = learner.getHistory();
