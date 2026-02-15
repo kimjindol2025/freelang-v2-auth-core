@@ -154,9 +154,10 @@ export class Parser {
    *   - IDENT                     : number, string, bool, int
    *   - IDENT < TYPE >            : array<number>, map<string, number>
    *   - IDENT < TYPE , TYPE ... > : 제네릭 타입
+   *   - IDENT < IDENT < TYPE > >  : nested generics (Phase 4.5+)
    *
-   * 제한: nested generics은 미지원 (array<array<number>> X)
-   *       → 렉서에서 >> 를 SHR 토큰으로 처리하기 때문
+   * Phase 4.5에서 TokenBuffer가 SHR >> 토큰을 2개 GT > 토큰으로 자동 분해하므로
+   * nested generics (array<array<number>>) 완벽 지원 ✅
    */
   private parseType(): string {
     let type = '';

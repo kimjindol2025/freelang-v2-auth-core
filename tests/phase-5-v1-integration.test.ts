@@ -71,6 +71,33 @@ output: number`;
       expect(ast.intent).toBeUndefined();
     });
 
+    test('Phase 5: 한 줄 형식 파싱 (세미콜론/줄바꿈 선택적)', () => {
+      // Phase 5 AI-First: 한 줄에 모든 것을 쓸 수 있게
+      const code = `fn sum input: array<number> output: number intent: "배열 합산"`;
+
+      const lexer = new Lexer(code);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+
+      expect(ast.fnName).toBe('sum');
+      expect(ast.inputType).toBe('array<number>');
+      expect(ast.outputType).toBe('number');
+      expect(ast.intent).toBe('배열 합산');
+    });
+
+    test('Phase 5: 데코레이터 + 한 줄 형식', () => {
+      const code = `@minimal fn sum input: array<number> output: number`;
+
+      const lexer = new Lexer(code);
+      const buffer = new TokenBuffer(lexer);
+      const ast = parseMinimalFunction(buffer);
+
+      expect(ast.decorator).toBe('minimal');
+      expect(ast.fnName).toBe('sum');
+      expect(ast.inputType).toBe('array<number>');
+      expect(ast.outputType).toBe('number');
+    });
+
     test('intent 포함한 .free 파싱', () => {
       const code = `fn average
 input: array<number>
