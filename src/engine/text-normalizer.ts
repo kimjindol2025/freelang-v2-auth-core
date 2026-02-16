@@ -34,10 +34,10 @@ export class TextNormalizer {
     // Step 3: 공백 기준으로 토큰 분할
     const tokens = text.split(/\s+/).filter(t => t.length > 0);
 
-    // Step 4: 한글 조사 제거 (을, 는, 이, 를, 에서, 에)
+    // Step 4: 한글 조사/어미 제거 (을, 는, 이, 를, 에서, 에, 와, 고, 지만, 영, 링)
     const processed = tokens.map(token => {
-      // 한글만 있는 토큰에서 조사 제거
-      const match = token.match(/^(.*?)(을|는|이|를|에서|에|와|고|지만)$/);
+      // 한글만 있는 토큰에서 조사/어미 제거
+      const match = token.match(/^(.*?)(을|는|이|를|에서|에|와|고|지만|영|링)$/);
       return match ? match[1] : token;
     });
 
