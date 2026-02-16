@@ -26,6 +26,7 @@ export interface InferenceContext {
   variables: Map<string, TypeInfo>;
   functions: Map<string, { params: TypeInfo[]; returns: string }>;
   loopVariables: Map<string, string>; // for i in 0..10 → i:number
+  variableAssignments: Map<string, string>; // Track variable → type assignments
 }
 
 export class TypeInferenceEngine {
@@ -37,6 +38,7 @@ export class TypeInferenceEngine {
       variables: new Map(),
       functions: new Map(),
       loopVariables: new Map(),
+      variableAssignments: new Map(),
     };
     this.initializePatterns();
   }
@@ -94,20 +96,31 @@ export class TypeInferenceEngine {
         const type = this.inferTypeFromValue(value);
 
         if (type) {
+          // IMPROVED: Confidence based on how certain the inference is
+          let confidence = 0.8;
+          if (type === 'number' || type === 'string' || type === 'bool') {
+            confidence = 0.9; // High confidence for simple literals
+          } else if (type === 'array' || type === 'object') {
+            confidence = 0.75; // Moderate for complex types
+          }
+
           inferred.push({
             name: varName,
             type,
-            confidence: 0.8,
+            confidence,
             source: 'inferred',
           });
+          // Track assignment for context-aware inference
+          this.context.variableAssignments.set(varName, type);
         } else {
-          // FIXED: Even if type inference failed, still record with lower confidence
+          // IMPROVED: Record assignment attempt but mark as very uncertain
           inferred.push({
             name: varName,
             type: 'any',  // Unknown type
-            confidence: 0.3,  // Low confidence for unknown
+            confidence: 0.15,  // Very low confidence for unknown value assignments
             source: 'inferred',
           });
+          this.context.variableAssignments.set(varName, 'any');
         }
       }
 
@@ -161,6 +174,34 @@ export class TypeInferenceEngine {
   }
 
   /**
+   * Lookup variable type from context
+   * IMPROVED: Context-aware type inference instead of always returning 'any'
+   */
+  private lookupVariableType(varName: string): { type: string; confidence: number } {
+    // Check if this variable was assigned a type
+    if (this.context.variableAssignments.has(varName)) {
+      const assignedType = this.context.variableAssignments.get(varName)!;
+      if (assignedType !== 'any') {
+        return { type: assignedType, confidence: 0.7 }; // Good confidence if we tracked it
+      }
+    }
+
+    // Check loop variables
+    if (this.context.loopVariables.has(varName)) {
+      return { type: this.context.loopVariables.get(varName)!, confidence: 1.0 };
+    }
+
+    // Check declared variables
+    if (this.context.variables.has(varName)) {
+      const info = this.context.variables.get(varName)!;
+      return { type: info.type, confidence: info.confidence };
+    }
+
+    // Unknown variable
+    return { type: 'any', confidence: 0.1 }; // Very low confidence for completely unknown
+  }
+
+  /**
    * Infer return type from function body
    * IMPROVED: Better priority, avoid false positives
    *
@@ -174,6 +215,7 @@ export class TypeInferenceEngine {
     const lines = body.split('\n');
 
     // Strategy 1: Explicit return statements (highest priority)
+    let returnedVar: string | null = null;
     for (const line of lines) {
       const returnMatch = line.match(/return\s+(.+)/);
       if (returnMatch) {
@@ -181,6 +223,27 @@ export class TypeInferenceEngine {
 
         // Use our improved expression type inference
         const type = this.inferExpressionType(value);
+        if (type !== 'any') {
+          return type;  // Known type from return expression
+        }
+
+        // IMPROVED: If return expression is a variable that's 'any',
+        // check if it's assigned somewhere in the body
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+          returnedVar = value;
+        } else {
+          // For complex expressions that return 'any', continue checking
+          return type;
+        }
+      }
+    }
+
+    // If we found a returned variable, try to infer its type from assignment
+    if (returnedVar) {
+      const assignmentMatch = body.match(new RegExp(`${returnedVar}\\s*=\\s*(.+?)(?:\n|$)`));
+      if (assignmentMatch) {
+        const assignedExpr = assignmentMatch[1].trim();
+        const type = this.inferExpressionType(assignedExpr);
         if (type !== 'any') {
           return type;
         }
@@ -272,11 +335,20 @@ export class TypeInferenceEngine {
           }
         }
         // Comparison/logical operations
-        else if (new RegExp(`${param}\\s*(&&|\\|\\||!|==|!=|>|<)`).test(body)) {
+        else if (new RegExp(`${param}\\s*(&&|\\|\\||!|==|!=|>|<|>=|<=)`).test(body)) {
+          // IMPROVED: Logical ops (&&, ||, !) indicate boolean
+          // Comparison ops (>, <, ==, etc.) indicate the param is likely number or comparable
           if (new RegExp(`${param}\\s*(&&|\\|\\||!)`).test(body)) {
-            inferredType = 'bool';
+            inferredType = 'bool';  // Used in boolean context
           } else {
-            inferredType = 'number'; // comparisons usually with numbers
+            // Comparison operators - check if param is being compared with numbers
+            const comparisonMatch = body.match(new RegExp(`${param}\\s*(>|<|>=|<=|==|!=)\\s*([0-9]+)`));
+            if (comparisonMatch) {
+              inferredType = 'number';  // Compared with number literal
+            } else {
+              // Could be comparing strings too, but number is more common
+              inferredType = 'any';  // Uncertain without more context
+            }
           }
         }
       }
@@ -289,15 +361,21 @@ export class TypeInferenceEngine {
 
   /**
    * Infer type of an expression
-   * IMPROVED: Better context awareness, correct binary operation typing
+   * IMPROVED: Context-aware inference, better edge case handling
    *
    * Handles:
-   * - Binary operations: number + number = number, string + string = string
-   * - Array operations: array.map = array
-   * - Function calls: parseInt("123") = number
+   * - Literals (highest priority, 100% confidence)
+   * - Method calls (high priority)
+   * - Function calls
+   * - Binary/unary operations with variable context lookup
+   * - Comparison/logical operations
    */
   public inferExpressionType(expr: string): string {
-    // 1. Check literals first (most reliable)
+    if (!expr || expr.trim() === '') return 'any';
+
+    expr = expr.trim();
+
+    // 1. Check literals first (most reliable, 100% confidence)
 
     // Array literals: [1, 2, 3]
     if (expr.startsWith('[') && expr.endsWith(']')) {
@@ -315,31 +393,44 @@ export class TypeInferenceEngine {
       return 'bool';
     }
 
-    // Number literals
-    if (/^\d+(\.\d+)?$/.test(expr)) {
+    // Number literals (including negative)
+    if (/^-?\d+(\.\d+)?$/.test(expr)) {
       return 'number';
     }
 
-    // 2. Check method calls (methods determine type)
+    // 2. Handle parentheses - unwrap and re-analyze (edge case)
+    if (expr.startsWith('(') && expr.endsWith(')')) {
+      const inner = expr.slice(1, -1);
+      return this.inferExpressionType(inner);
+    }
+
+    // 3. Check method calls (high priority - methods strongly determine type)
 
     // Array methods return arrays
-    if (expr.includes('.map') || expr.includes('.filter') || expr.includes('.slice')) {
+    if (expr.includes('.map') || expr.includes('.filter') || expr.includes('.slice') ||
+        expr.includes('.reduce') || expr.includes('.forEach')) {
       return 'array';
     }
 
     // String methods return strings
     if (expr.includes('.substring') || expr.includes('.concat') || expr.includes('.split') ||
-        expr.includes('.toUpperCase') || expr.includes('.toLowerCase') || expr.includes('.trim')) {
+        expr.includes('.toUpperCase') || expr.includes('.toLowerCase') || expr.includes('.trim') ||
+        expr.includes('.repeat') || expr.includes('.padStart')) {
       return 'string';
     }
 
-    // 3. Check function calls
+    // 4. Check function calls
 
-    if (expr.includes('parseInt') || expr.includes('parseFloat')) return 'number';
+    if (expr.includes('parseInt') || expr.includes('parseFloat') || expr.includes('Number(')) {
+      return 'number';
+    }
     if (expr.includes('Math.')) return 'number';
     if (expr.includes('JSON.parse')) return 'object';
+    if (expr.includes('String(')) return 'string';
+    if (expr.includes('Array.')) return 'array';
+    if (expr.includes('Boolean(')) return 'bool';
 
-    // 4. Check binary operations (FIXED: better type handling)
+    // 5. Check binary operations with IMPROVED context awareness
 
     // String concatenation: "text" + "more" or "text" + variable
     if (expr.includes('+')) {
@@ -347,68 +438,106 @@ export class TypeInferenceEngine {
       if (hasStringLiteral) {
         return 'string';  // String concatenation
       }
-      // Check if expression looks like number arithmetic (10 + 5 or 10 + 5 * 2)
-      // If there are other arithmetic operators (*, /, -), it's number arithmetic
+
+      // If there are other arithmetic operators (*, /, -), likely number arithmetic
       if (/[\-*/%]/.test(expr)) {
         return 'number';
       }
-      // Check if both sides are numbers (e.g., 10 + 5)
+
+      // Check if both sides are number literals (e.g., 10 + 5)
       const parts = expr.split('+').map(s => s.trim());
       if (parts.length === 2 && /^\d+(\.\d+)?$/.test(parts[0]) && /^\d+(\.\d+)?$/.test(parts[1])) {
-        // Both sides are number literals
         return 'number';
       }
-      // Otherwise uncertain (could be number + variable or variable + anything)
+
+      // IMPROVED: Check variable context for operands
+      if (parts.length === 2) {
+        const leftLookup = this.lookupVariableType(parts[0]);
+        const rightLookup = this.lookupVariableType(parts[1]);
+
+        // If both sides are known to be numbers
+        if (leftLookup.type === 'number' && rightLookup.type === 'number') {
+          return 'number';
+        }
+        // If both sides are known to be strings
+        if (leftLookup.type === 'string' && rightLookup.type === 'string') {
+          return 'string';
+        }
+        // If at least one side is known to be string, treat as string concat
+        if (leftLookup.type === 'string' || rightLookup.type === 'string') {
+          return 'string';
+        }
+      }
+
+      // Otherwise uncertain (mixed or unknown types)
       return 'any';
     }
 
-    // FIXED: Arithmetic operators (- * / %) should only return 'number' for clear numeric expressions
-    // NOT for variable operations like "a - b" or "data * 2"
+    // Arithmetic operators: *, / (more reliably numeric)
     if (/[\*/%]/.test(expr) && !expr.includes('.')) {
-      // *, /, % are more reliably numeric operations
-      // Check if expression contains only number literals
       const withoutOps = expr.replace(/[\*/%()]/g, ' ').trim();
       const tokens = withoutOps.split(/\s+/).filter(t => t !== '');
-      const allNumeric = tokens.every(t => /^\d+(\.\d+)?$/.test(t));
 
+      // If all tokens are numeric literals
+      const allNumeric = tokens.every(t => /^-?\d+(\.\d+)?$/.test(t));
       if (allNumeric && tokens.length > 0) {
         return 'number';
       }
-      // If variables involved, we can't be sure
-      return 'any';
+
+      // IMPROVED: Check if all tokens are known-numeric variables
+      const allKnownNumeric = tokens.every(t => {
+        const lookup = this.lookupVariableType(t);
+        return lookup.type === 'number';
+      });
+      if (allKnownNumeric && tokens.length > 0) {
+        return 'number';
+      }
+
+      return 'any';  // Mixed or unknown types
     }
 
-    // For minus (-), be more careful (could be negative number or subtraction)
+    // Subtraction (-) - be careful (negative number vs subtraction)
     if (expr.includes('-') && !expr.includes('.')) {
       // Check if it's a negative number at the start
       if (/^-\d+(\.\d+)?$/.test(expr.trim())) {
         return 'number';
       }
+
       // Check if it's subtraction of two numbers
       const parts = expr.split('-').map(s => s.trim()).filter(s => s !== '');
       if (parts.length >= 2) {
-        const allNumeric = parts.every(t => /^\d+(\.\d+)?$/.test(t));
+        const allNumeric = parts.every(t => /^-?\d+(\.\d+)?$/.test(t));
         if (allNumeric) {
           return 'number';
         }
+
+        // IMPROVED: Check context
+        const allKnownNumeric = parts.every(t => this.lookupVariableType(t).type === 'number');
+        if (allKnownNumeric) {
+          return 'number';
+        }
       }
-      // Otherwise uncertain
+
       return 'any';
     }
 
-    // 5. Check comparison/logical operations (before defaults)
+    // 6. Check comparison/logical operations
 
-    // Comparison expressions return boolean (must check before +/-)
     if (/[><=!]=?/.test(expr) && !expr.includes('++') && !expr.includes('--')) {
-      return 'bool';
+      return 'bool';  // Comparison returns boolean
     }
 
-    // Logical expressions (AND, OR, NOT)
     if (/&&|\|\||!/.test(expr)) {
-      return 'bool';
+      return 'bool';  // Logical operations return boolean
     }
 
-    // 6. Default
+    // 7. Single variable - use context lookup
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(expr)) {
+      const lookup = this.lookupVariableType(expr);
+      return lookup.type;  // Return tracked type or 'any' with low confidence
+    }
+
+    // 8. Default - return 'any'
     return 'any';
   }
 
@@ -441,6 +570,7 @@ export class TypeInferenceEngine {
       variables: new Map(),
       functions: new Map(),
       loopVariables: new Map(),
+      variableAssignments: new Map(),
     };
   }
 
