@@ -8,6 +8,7 @@ import { CodeGen } from './codegen';
 import { Compiler } from './compiler';
 import { Corrector, CorrectionResult } from './correction';
 import { Learner } from './learner';
+import { OptimizationDetector, OptimizationSuggestion } from './analyzer/optimization-detector';
 
 export interface PipelineInput {
   instruction: string;        // free-form input: "sum array", "filter > 5", etc
@@ -15,12 +16,13 @@ export interface PipelineInput {
 }
 
 export interface PipelineOutput {
-  header: HeaderProposal;     // proposed header
-  intent: AIIntent;           // generated IR intent
-  vm: VMResult;               // VM execution result
+  header: HeaderProposal;           // proposed header
+  intent: AIIntent;                 // generated IR intent
+  vm: VMResult;                     // VM execution result
   correction?: CorrectionResult;
   compile?: { ok: boolean; c_code?: string };
-  final_value?: unknown;  // Can be number, array, iterator, boolean, etc.
+  final_value?: unknown;            // Can be number, array, iterator, boolean, etc.
+  optimizations?: OptimizationSuggestion[]; // AI-detected optimization opportunities
 }
 
 export class Pipeline {
@@ -30,6 +32,7 @@ export class Pipeline {
   private compiler: Compiler;
   private corrector: Corrector;
   private learner: Learner;
+  private optimizer: OptimizationDetector;
 
   constructor(outDir?: string) {
     this.engine = new AutoHeaderEngine();
@@ -38,6 +41,7 @@ export class Pipeline {
     this.compiler = new Compiler(outDir);
     this.corrector = new Corrector();
     this.learner = new Learner();
+    this.optimizer = new OptimizationDetector();
   }
 
   /**
@@ -50,6 +54,7 @@ export class Pipeline {
    *     header: { fn: "sum", input: "array<number>", ... },
    *     intent: { fn: "sum", params: [...], body: [Op.ARR_NEW, ...] },
    *     vm: { ok: true, value: 15, cycles: 10, ms: 1.2 },
+   *     optimizations: [{ type: "constant_folding", confidence: 0.95, ... }],
    *     final_value: 15
    *   }
    */
@@ -62,6 +67,10 @@ export class Pipeline {
 
     // Step 2: Generate IR intent from header and data
     const intent = this.generateIntent(header, input.data);
+
+    // Step 2.5: 🤖 AUTOMATIC OPTIMIZATION DETECTION (AI-First)
+    // Detect potential optimizations in the generated IR
+    const optimizations = this.optimizer.detectOptimizations(intent.body);
 
     // Step 3: Execute on VM
     let vmResult = this.vm.run(intent.body);
@@ -90,6 +99,7 @@ export class Pipeline {
       correction,
       compile: compileResult,
       final_value: vmResult.value,
+      optimizations: optimizations.length > 0 ? optimizations : undefined,
     };
   }
 

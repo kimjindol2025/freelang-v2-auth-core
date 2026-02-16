@@ -99,7 +99,78 @@ export class Parser {
   }
 
   /**
+   * Phase 5 Stage 3: Detect function structure
+   *
+   * Heuristic: Current IDENT followed by input/output types → function
+   * Used when 'fn' keyword is omitted
+   *
+   * Uses lookahead (peek) instead of backtracking since TokenBuffer
+   * doesn't support seeking. Pattern detection:
+   *   - IDENT (current, name)
+   *   - INPUT or type-like IDENT (peek 1)
+   *
+   * Examples:
+   *   - sum input array<number> → true (name + INPUT keyword)
+   *   - calculate array number → true (name + type patterns)
+   *   - process do { ... } → false (body immediately after name)
+   */
+  private detectFunctionStructure(): boolean {
+    // Must start with IDENT (function name)
+    if (!this.check(TokenType.IDENT)) {
+      return false;
+    }
+
+    // Look ahead to see if this looks like a function signature
+    const nextToken = this.peek(1);
+
+    // Pattern 1: IDENT INPUT ... → definitely a function
+    if (nextToken.type === TokenType.INPUT) {
+      return true;
+    }
+
+    // Pattern 2: IDENT OUTPUT ... → possibly function (edge case)
+    if (nextToken.type === TokenType.OUTPUT) {
+      return true;
+    }
+
+    // Pattern 3: IDENT + type-like IDENT
+    // Common type names that indicate function signature
+    if (nextToken.type === TokenType.IDENT) {
+      const nextVal = nextToken.value.toLowerCase();
+      const typePatterns = [
+        'array',
+        'number',
+        'string',
+        'boolean',
+        'bool',
+        'int',
+        'float',
+        'any',
+        'unknown'
+      ];
+
+      // Check if it looks like a type
+      if (typePatterns.some(t => nextVal === t || nextVal.startsWith(t + '<'))) {
+        return true;
+      }
+    }
+
+    // Pattern 4: IDENT LBRACKET ... (array syntax [type])
+    if (nextToken.type === TokenType.LBRACKET) {
+      return true;
+    }
+
+    // Otherwise, doesn't look like a function signature
+    return false;
+  }
+
+  /**
    * 파일 전체 파싱 (탑 레벨)
+   *
+   * Phase 5 Stage 3: Support optional 'fn' keyword
+   * - If 'fn' present: use traditional parsing
+   * - If 'fn' absent but structure matches: parse as function
+   * - Otherwise: error
    */
   public parse(): MinimalFunctionAST {
     // Skip leading decorators or comments
@@ -114,27 +185,54 @@ export class Parser {
       }
     }
 
-    // Parse fn keyword
-    this.expect(TokenType.FN, 'Expected "fn" keyword');
+    // Phase 5 Stage 3: Optional fn keyword
+    if (this.check(TokenType.FN)) {
+      // Traditional: fn keyword present
+      this.advance();
+    } else {
+      // New: fn keyword absent - verify function structure
+      if (!this.detectFunctionStructure()) {
+        throw new ParseError(
+          this.current().line,
+          this.current().column,
+          'Expected "fn" keyword or valid function structure (name + types)'
+        );
+      }
+    }
 
     // Parse function name
     const nameToken = this.expect(TokenType.IDENT, 'Expected function name');
     const fnName = nameToken.value;
 
-    // Parse input type declaration
-    // Phase 5 Task 1: One-line format
-    this.expect(TokenType.INPUT, 'Expected "input" keyword');
-    // Phase 5 Task 3: Colon optional (콜론은 있어도 없어도 됨)
-    this.match(TokenType.COLON);
-    // Phase 5 Task 2: 타입 생략 가능 (intent에서 추론)
-    const inputType = this.parseOptionalType();
+    // Phase 5 Stage 3: Parse input type with optional keyword
+    // Support both:
+    //   - input: type or input type (keyword present)
+    //   - type (keyword absent, positional)
+    let inputType: string;
+    if (this.check(TokenType.INPUT)) {
+      // Traditional: input keyword present
+      this.advance();
+      this.match(TokenType.COLON); // Colon optional (Phase 5 Task 3)
+      inputType = this.parseOptionalType();
+    } else {
+      // New: input keyword absent, parse type directly
+      inputType = this.parseOptionalType();
+    }
 
-    // Parse output type declaration
-    this.expect(TokenType.OUTPUT, 'Expected "output" keyword');
-    // Phase 5 Task 3: Colon optional
-    this.match(TokenType.COLON);
-    // Phase 5 Task 2: 타입 생략 가능 (intent에서 추론)
-    const outputType = this.parseOptionalType();
+    // Phase 5 Stage 3: Parse output type with optional keyword
+    // Support both:
+    //   - output: type or output type (keyword present)
+    //   - type (keyword absent, positional)
+    let outputType: string;
+    if (this.check(TokenType.OUTPUT)) {
+      // Traditional: output keyword present
+      this.advance();
+      this.match(TokenType.COLON); // Colon optional (Phase 5 Task 3)
+      outputType = this.parseOptionalType();
+    } else {
+      // New: output keyword absent, parse type directly
+      outputType = this.parseOptionalType();
+    }
 
     // Parse optional intent
     let intent: string | undefined;

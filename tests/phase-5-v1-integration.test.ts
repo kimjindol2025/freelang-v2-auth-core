@@ -178,24 +178,34 @@ output: int`;
       expect(ast.inputType).toBe('[number]');
     });
 
-    test('파싱 에러: missing input', () => {
+    test('Phase 5 Stage 3: input keyword optional (fn present, input omitted)', () => {
+      // With Stage 3, input keyword is optional
+      // fn sum output: number → parses with empty input type
       const code = `fn sum
 output: number`;
 
       const lexer = new Lexer(code);
       const buffer = new TokenBuffer(lexer);
 
-      expect(() => parseMinimalFunction(buffer)).toThrow('Expected "input" keyword');
+      const ast = parseMinimalFunction(buffer);
+      expect(ast.fnName).toBe('sum');
+      expect(ast.inputType).toBe(''); // Input type omitted (will be inferred)
+      expect(ast.outputType).toBe('number');
     });
 
-    test('파싱 에러: missing output', () => {
+    test('Phase 5 Stage 3: output keyword optional (fn present, output omitted)', () => {
+      // With Stage 3, output keyword is optional
+      // fn sum input: array<number> → parses with empty output type
       const code = `fn sum
 input: array<number>`;
 
       const lexer = new Lexer(code);
       const buffer = new TokenBuffer(lexer);
 
-      expect(() => parseMinimalFunction(buffer)).toThrow('Expected "output" keyword');
+      const ast = parseMinimalFunction(buffer);
+      expect(ast.fnName).toBe('sum');
+      expect(ast.inputType).toBe('array<number>');
+      expect(ast.outputType).toBe(''); // Output type omitted (will be inferred)
     });
   });
 
