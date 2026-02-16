@@ -76,8 +76,8 @@ export class Dashboard {
 
     // 승인율 평균
     const approvalRates = allStats
-      .map(s => s.approvalRate)
-      .filter(rate => !isNaN(rate) && rate !== undefined);
+      .map(s => s.approval_rate)
+      .filter(rate => typeof rate === 'number' && !isNaN(rate));
     const avgApprovalRate =
       approvalRates.length > 0
         ? approvalRates.reduce((a, b) => a + b) / approvalRates.length

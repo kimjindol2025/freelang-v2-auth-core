@@ -36,6 +36,7 @@ export interface PatternStats {
 export class PatternUpdater {
   private patternHistory: Map<string, PatternUpdate[]> = new Map();
   patternStats: Map<string, PatternStats> = new Map();  // Made public for compatibility methods
+  instanceVariationCounts: Map<string, Map<string, number>> = new Map();  // Instance-level variation tracking (public for prototype methods)
 
   /**
    * 피드백을 기반으로 패턴 업데이트
@@ -418,7 +419,7 @@ export class PatternUpdater {
    * 호환성: 인기 변형 (이전 API)
    */
   getPopularVariations(operation: string, count: number): Array<{ text: string; count: number }> {
-    const counts = variationCounts.get(operation);
+    const counts = this.instanceVariationCounts.get(operation);
     if (!counts || counts.size === 0) return [];
     return Array.from(counts.entries())
       .map(([text, cnt]) => ({ text, count: cnt }))
@@ -589,8 +590,8 @@ PatternUpdater.prototype.get = function(operation: string): any {
   // Merge with patternStats for complete data
   const stats = this.patternStats.get(operation);
 
-  // Merge variations from initial setup and from variationCounts
-  const variationMap = variationCounts.get(operation) || new Map();
+  // Merge variations from initial setup and from instanceVariationCounts
+  const variationMap = this.instanceVariationCounts.get(operation) || new Map();
   const mergedVariations = legacy.variations.map(v => ({
     text: v.text,
     count: variationMap.get(v.text) || v.count,
@@ -680,10 +681,10 @@ PatternUpdater.prototype.recordApproval = function(
 
   // 변형 카운트
   if (keyword) {
-    if (!variationCounts.has(operation)) {
-      variationCounts.set(operation, new Map());
+    if (!this.instanceVariationCounts.has(operation)) {
+      this.instanceVariationCounts.set(operation, new Map());
     }
-    const counts = variationCounts.get(operation)!;
+    const counts = this.instanceVariationCounts.get(operation)!;
     counts.set(keyword, (counts.get(keyword) || 0) + 1);
   }
 
