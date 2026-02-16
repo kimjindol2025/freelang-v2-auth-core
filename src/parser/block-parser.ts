@@ -333,7 +333,7 @@ export class BlockParser {
   }
 
   /**
-   * Get block at specific line number
+   * Get block at specific line number (block start)
    */
   public getBlockAt(line: number): BlockStatement | undefined {
     return this.blocks.find(b => b.line === line);
@@ -341,21 +341,37 @@ export class BlockParser {
 
   /**
    * Check if a line is inside a block
+   * Fixed: Use actual statement lines instead of body.length
    */
   public isInBlock(line: number): boolean {
-    return this.blocks.some(
-      b => b.line < line && b.line + b.body.length >= line
-    );
+    return this.blocks.some(block => {
+      // Block starts at this line
+      if (block.line >= line) return false;
+
+      // Get the actual last line of block content
+      if (block.body.length === 0) return false;
+      const lastStmtLine = block.body[block.body.length - 1]?.line ?? block.line;
+
+      // Check if line is within block range
+      return line <= lastStmtLine;
+    });
   }
 
   /**
    * Get parent block of a line
+   * Fixed: Use actual statement lines instead of body.length
    */
   public getParentBlock(line: number): BlockStatement | undefined {
     // Find the innermost block containing this line
     let parent: BlockStatement | undefined;
     for (const block of this.blocks) {
-      if (block.line < line && block.line + block.body.length >= line) {
+      if (block.line >= line) continue;
+
+      // Get actual last line of block
+      if (block.body.length === 0) continue;
+      const lastStmtLine = block.body[block.body.length - 1]?.line ?? block.line;
+
+      if (line <= lastStmtLine) {
         if (!parent || block.indent > parent.indent) {
           parent = block;
         }
