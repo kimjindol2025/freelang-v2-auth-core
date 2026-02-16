@@ -323,46 +323,46 @@ describe('Project Ouroboros: Phase 5 Wave 2 - Functions & Recursion', () => {
   test('12) 재귀와 루프 혼합', () => {
     // func(n) { for i in 0..n { sum += factorial(i) } return sum; }
     const ir = [
-      { op: 'PUSH', arg: '5' },
-      { op: 'CALL', arg: 'f' },
-      { op: 'RET' },
+      { op: 'PUSH', arg: '5' },      // 0
+      { op: 'CALL', arg: 'f' },      // 1
+      { op: 'RET' },                 // 2
 
       // func(n) - 루프 + 재귀
-      { op: 'FRAME', arg: '2' },      // n, sum
-      { op: 'PUSH', arg: '0' },
-      { op: 'STORE', arg: 's' },      // sum = 0
+      { op: 'FRAME', arg: '2' },     // 3: n, sum
+      { op: 'PUSH', arg: '0' },      // 4
+      { op: 'STORE', arg: 's' },     // 5: sum = 0
 
-      { op: 'PUSH', arg: '0' },
-      { op: 'STORE', arg: 'i' },      // i = 0
+      { op: 'PUSH', arg: '0' },      // 6
+      { op: 'STORE', arg: 'i' },     // 7: i = 0
 
       // while i < n
-      { op: 'LOAD', arg: 'i' },       // 10: 루프 시작
-      { op: 'LOAD', arg: 'n' },
-      { op: '<' },
-      { op: 'JMP_NOT', arg: '20' },
+      { op: 'LOAD', arg: 'i' },      // 8: 루프 시작
+      { op: 'LOAD', arg: 'n' },      // 9
+      { op: '<' },                   // 10
+      { op: 'JMP_NOT', arg: '24' },  // 11
 
       // sum += factorial(i)
-      { op: 'LOAD', arg: 'i' },       // 14
-      { op: 'CALL', arg: 'fact' },    // factorial(i)
-      { op: 'LOAD', arg: 's' },
-      { op: 'ADD' },
-      { op: 'STORE', arg: 's' },
+      { op: 'LOAD', arg: 'i' },      // 12
+      { op: 'CALL', arg: 'fact' },   // 13: factorial(i)
+      { op: 'LOAD', arg: 's' },      // 14
+      { op: 'ADD' },                 // 15
+      { op: 'STORE', arg: 's' },     // 16
 
       // i++
-      { op: 'LOAD', arg: 'i' },
-      { op: 'PUSH', arg: '1' },
-      { op: 'ADD' },
-      { op: 'STORE', arg: 'i' },
-      { op: 'JMP', arg: '10' },
+      { op: 'LOAD', arg: 'i' },      // 17
+      { op: 'PUSH', arg: '1' },      // 18
+      { op: 'ADD' },                 // 19
+      { op: 'STORE', arg: 'i' },     // 20
+      { op: 'JMP', arg: '8' },       // 21
 
       // return sum
-      { op: 'LOAD', arg: 's' },
-      { op: 'RET' }
+      { op: 'LOAD', arg: 's' },      // 24
+      { op: 'RET' }                  // 25
     ];
 
     console.log(`✅ 재귀와 루프: 루프에서 factorial() 호출, sum = 1+1+2+6+24+120 = 154`);
     expect(ir[1].op).toBe('CALL');
-    expect(ir[15].op).toBe('CALL');
+    expect(ir[13].op).toBe('CALL');
   });
 
   test('13) 메모이제이션 최적화', () => {
