@@ -1,7 +1,7 @@
 {
   "name": "v2-freelang-ai",
-  "version": "2.0.0-beta",
-  "description": "AI-First Programming Language - Intent to C Code Generation",
+  "version": "2.2.0-alpha",
+  "description": "AI-First Autonomous Learning Language - Instant Feedback + Auto-Improvement",
   "main": "dist/cli/index.js",
   "types": "dist/cli/index.d.ts",
   "scripts": {
