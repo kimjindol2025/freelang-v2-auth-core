@@ -238,3 +238,115 @@ void vm_execute_callback(int callback_id, void *args) {
   /* Stub: Will be replaced by actual VM implementation */
   fprintf(stderr, "[FFI] Callback %d executed (stub)\n", callback_id);
 }
+
+/* ===== Dynamic Library Loading (dlopen/dlsym) ===== */
+
+#include <dlfcn.h>
+
+/* Keep track of loaded libraries */
+typedef struct {
+  void *handle;
+  char path[256];
+  int usage_count;
+} fl_library_entry_t;
+
+static fl_library_entry_t *loaded_libs[256];
+static int loaded_libs_count = 0;
+static pthread_mutex_t libs_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Load a shared library */
+void* freelang_load_library(const char *path) {
+  if (!path) return NULL;
+
+  /* Check if already loaded */
+  pthread_mutex_lock(&libs_mutex);
+  for (int i = 0; i < loaded_libs_count; i++) {
+    if (strcmp(loaded_libs[i]->path, path) == 0) {
+      loaded_libs[i]->usage_count++;
+      void *handle = loaded_libs[i]->handle;
+      pthread_mutex_unlock(&libs_mutex);
+      return handle;
+    }
+  }
+
+  /* Load new library */
+  void *handle = dlopen(path, RTLD_LAZY);
+  if (!handle) {
+    pthread_mutex_unlock(&libs_mutex);
+    fprintf(stderr, "[FFI] dlopen failed for %s: %s\n", path, dlerror());
+    return NULL;
+  }
+
+  /* Add to registry */
+  if (loaded_libs_count < 256) {
+    fl_library_entry_t *entry = (fl_library_entry_t*)malloc(sizeof(fl_library_entry_t));
+    entry->handle = handle;
+    strncpy(entry->path, path, 255);
+    entry->usage_count = 1;
+    loaded_libs[loaded_libs_count++] = entry;
+  }
+
+  pthread_mutex_unlock(&libs_mutex);
+  fprintf(stderr, "[FFI] Library loaded: %s (%p)\n", path, handle);
+  return handle;
+}
+
+/* Get function pointer from loaded library */
+void* freelang_get_function(void *lib_handle, const char *func_name) {
+  if (!lib_handle || !func_name) return NULL;
+
+  void *func_ptr = dlsym(lib_handle, func_name);
+  if (!func_ptr) {
+    fprintf(stderr, "[FFI] dlsym failed for %s: %s\n", func_name, dlerror());
+    return NULL;
+  }
+
+  fprintf(stderr, "[FFI] Function resolved: %s (%p)\n", func_name, func_ptr);
+  return func_ptr;
+}
+
+/* Unload library */
+void freelang_unload_library(void *lib_handle) {
+  if (!lib_handle) return;
+
+  pthread_mutex_lock(&libs_mutex);
+  for (int i = 0; i < loaded_libs_count; i++) {
+    if (loaded_libs[i]->handle == lib_handle) {
+      loaded_libs[i]->usage_count--;
+      if (loaded_libs[i]->usage_count <= 0) {
+        dlclose(lib_handle);
+        free(loaded_libs[i]);
+        /* Remove from array */
+        for (int j = i; j < loaded_libs_count - 1; j++) {
+          loaded_libs[j] = loaded_libs[j + 1];
+        }
+        loaded_libs_count--;
+        fprintf(stderr, "[FFI] Library unloaded (%p)\n", lib_handle);
+      }
+      pthread_mutex_unlock(&libs_mutex);
+      return;
+    }
+  }
+  pthread_mutex_unlock(&libs_mutex);
+}
+
+/* Get last error message from dlopen */
+const char* freelang_ffi_get_error(void) {
+  return dlerror();
+}
+
+/* Call native function with arbitrary arguments */
+int freelang_call_native(const char *lib_path, const char *func_name, void *args) {
+  /* Load library */
+  void *lib_handle = freelang_load_library(lib_path);
+  if (!lib_handle) return -1;
+
+  /* Get function pointer */
+  fl_native_fn_t fn = (fl_native_fn_t)freelang_get_function(lib_handle, func_name);
+  if (!fn) return -1;
+
+  /* Call function (simplified - real implementation needs argument marshalling) */
+  fn();
+
+  return 0;
+}

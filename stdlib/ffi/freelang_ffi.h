@@ -11,8 +11,8 @@
 
 /* ===== Type Definitions ===== */
 
-#define MAX_HANDLES 256
-#define MAX_CALLBACKS 1024
+#define MAX_HANDLES 1024
+#define MAX_CALLBACKS 4096
 
 /* Handle wrapper: Maps C handles to FreeLang callbacks */
 typedef struct {
@@ -75,5 +75,26 @@ void freelang_event_loop_stop(fl_event_context_t *ctx);
 
 /* Declare external VM function for callback execution */
 extern void vm_execute_callback(int callback_id, void *args);
+
+/* ===== Dynamic Library Loading (dlopen/dlsym) ===== */
+
+/* Load a shared library */
+void* freelang_load_library(const char *path);
+
+/* Get function pointer from loaded library */
+void* freelang_get_function(void *lib_handle, const char *func_name);
+
+/* Unload library */
+void freelang_unload_library(void *lib_handle);
+
+/* Get last error message from dlopen */
+const char* freelang_ffi_get_error(void);
+
+/* ===== FFI Function Call (C ↔ FreeLang) ===== */
+
+typedef void (*fl_native_fn_t)(void);
+
+/* Call native function with arbitrary arguments */
+int freelang_call_native(const char *lib_path, const char *func_name, void *args);
 
 #endif /* FREELANG_FFI_H */
