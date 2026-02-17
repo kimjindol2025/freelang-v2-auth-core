@@ -18,13 +18,78 @@ export interface RecognizedIntent {
 }
 
 /**
- * IntentParser: 자연어 → FreeLang 코드
+ * IntentParser: 자연어 → FreeLang 코드 (학습 기능 포함)
  */
 export class IntentParser {
   private patterns: Map<string, { code: string; keywords: string[] }> = new Map();
+  private patternWeights: Map<string, number> = new Map();
+  private successCount: Map<string, number> = new Map();
+  private totalAttempts: Map<string, number> = new Map();
 
   constructor() {
     this.initializePatterns();
+    this.initializeWeights();
+  }
+
+  /**
+   * 가중치 초기화 (학습 메커니즘)
+   */
+  private initializeWeights(): void {
+    for (const patternId of this.patterns.keys()) {
+      this.patternWeights.set(patternId, 1.0); // 기본 가중치
+      this.successCount.set(patternId, 0);
+      this.totalAttempts.set(patternId, 0);
+    }
+  }
+
+  /**
+   * 의도 인식 성공 기록 (학습)
+   */
+  recordSuccess(intentId: string): void {
+    if (this.patterns.has(intentId)) {
+      const current = this.successCount.get(intentId) || 0;
+      const total = this.totalAttempts.get(intentId) || 0;
+
+      this.successCount.set(intentId, current + 1);
+      this.totalAttempts.set(intentId, total + 1);
+
+      // 성공률에 따라 가중치 업데이트
+      const successRate = (current + 1) / (total + 1);
+      const newWeight = Math.min(2.0, 1.0 + successRate * 0.5);
+      this.patternWeights.set(intentId, newWeight);
+    }
+  }
+
+  /**
+   * 의도 인식 실패 기록 (학습)
+   */
+  recordFailure(intentId: string): void {
+    if (this.patterns.has(intentId)) {
+      const total = this.totalAttempts.get(intentId) || 0;
+      this.totalAttempts.set(intentId, total + 1);
+
+      // 실패하면 가중치 감소
+      const current = this.successCount.get(intentId) || 0;
+      const successRate = current / (total + 1);
+      const newWeight = Math.max(0.5, 1.0 + (successRate - 0.5) * 0.3);
+      this.patternWeights.set(intentId, newWeight);
+    }
+  }
+
+  /**
+   * 학습 통계 조회
+   */
+  getLearningStats(): Map<string, { successRate: number; weight: number; attempts: number }> {
+    const stats = new Map();
+    for (const [patternId, _] of this.patterns) {
+      const total = this.totalAttempts.get(patternId) || 0;
+      const success = this.successCount.get(patternId) || 0;
+      const successRate = total > 0 ? success / total : 0;
+      const weight = this.patternWeights.get(patternId) || 1.0;
+
+      stats.set(patternId, { successRate, weight, attempts: total });
+    }
+    return stats;
   }
 
   /**
@@ -150,6 +215,74 @@ export class IntentParser {
       code: 'result = str | toLowerCase',
       keywords: ['소문자', 'lowercase', 'lower', '소문'],
     });
+
+    // ==================== 재귀 패턴 ====================
+    // 팩토리얼
+    this.patterns.set('factorial', {
+      code: 'fn factorial(n) = n <= 1 ? 1 : n * factorial(n - 1); result = factorial(num)',
+      keywords: ['팩토리얼', 'factorial', '!'],
+    });
+
+    // 피보나치
+    this.patterns.set('fibonacci', {
+      code: 'fn fib(n) = n <= 1 ? n : fib(n-1) + fib(n-2); result = fib(num)',
+      keywords: ['피보나치', 'fibonacci', 'fib'],
+    });
+
+    // 누적합
+    this.patterns.set('cumulative-sum', {
+      code: 'result = arr | fold(0, (acc, x) => acc + x)',
+      keywords: ['누적합', 'cumulative', '누적'],
+    });
+
+    // 깊이 우선 탐색
+    this.patterns.set('tree-traverse', {
+      code: 'fn traverse(node) = { print(node.value); node.children.map(traverse) }',
+      keywords: ['트리', 'tree', '순회', 'traverse', 'dfs'],
+    });
+
+    // 피크 찾기
+    this.patterns.set('find-peak', {
+      code: 'result = arr | reduce(arr[0], (max, x) => x > max ? x : max)',
+      keywords: ['피크', 'peak', '최고', '정점'],
+    });
+
+    // 트리 깊이
+    this.patterns.set('tree-depth', {
+      code: 'fn depth(node) = node == null ? 0 : 1 + max(depth(node.left), depth(node.right)); result = depth(root)',
+      keywords: ['깊이', 'depth', '높이', 'height'],
+    });
+
+    // 모든 요소 합산 (재귀)
+    this.patterns.set('recursive-sum', {
+      code: 'fn recSum(arr, i) = i >= len(arr) ? 0 : arr[i] + recSum(arr, i+1); result = recSum(arr, 0)',
+      keywords: ['재귀합산', 'recursive sum', '재귀', '반복적합산', 'recsum'],
+    });
+
+    // ==================== 구조체/객체 패턴 ====================
+    // 객체 생성
+    this.patterns.set('create-object', {
+      code: 'result = {name: "value", age: 25, active: true}',
+      keywords: ['객체', 'object', 'struct', '구조체'],
+    });
+
+    // 객체 필드 접근
+    this.patterns.set('access-field', {
+      code: 'result = obj.field',
+      keywords: ['접근', 'access', '.', '필드', 'field'],
+    });
+
+    // 객체 매핑
+    this.patterns.set('object-map', {
+      code: 'result = {name: obj.name, age: obj.age + 1}',
+      keywords: ['매핑', 'map', '변환', 'transform'],
+    });
+
+    // 중첩 객체
+    this.patterns.set('nested-object', {
+      code: 'result = {user: {name: "John", address: {city: "Seoul"}}, metadata: {created: true}}',
+      keywords: ['중첩', 'nested', '객체', 'object', '계층', 'hierarchy'],
+    });
   }
 
   /**
@@ -180,8 +313,15 @@ export class IntentParser {
       }
     }
 
+    // 가중치를 신뢰도에 적용 (학습 기반)
+    const weightedMatches = matches.map(match => ({
+      ...match,
+      originalConfidence: match.confidence,
+      confidence: match.confidence * (this.patternWeights.get(match.intentId) || 1.0),
+    }));
+
     // 가장 높은 신뢰도의 매칭 찾기
-    if (matches.length === 0) {
+    if (weightedMatches.length === 0) {
       return {
         intent: 'unknown',
         confidence: 0,
@@ -190,14 +330,17 @@ export class IntentParser {
       };
     }
 
-    matches.sort((a, b) => b.confidence - a.confidence);
-    const best = matches[0];
+    weightedMatches.sort((a, b) => b.confidence - a.confidence);
+    const best = weightedMatches[0];
+
+    // 신뢰도 정규화 (0.0-1.0)
+    const normalizedConfidence = Math.min(1.0, best.confidence);
 
     return {
       intent: best.intentId,
-      confidence: best.confidence,
+      confidence: normalizedConfidence,
       code: best.code,
-      explanation: `의도 인식: ${best.intentId} (신뢰도: ${(best.confidence * 100).toFixed(1)}%)`,
+      explanation: `의도 인식: ${best.intentId} (신뢰도: ${(normalizedConfidence * 100).toFixed(1)}%, 가중치: ${(this.patternWeights.get(best.intentId) || 1.0).toFixed(2)})`,
     };
   }
 

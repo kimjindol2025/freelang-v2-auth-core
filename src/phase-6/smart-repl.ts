@@ -61,19 +61,103 @@ export class SmartREPL {
       variables: new Map(),
       functions: new Map(),
       globals: {
-        // Built-in functions
+        // ==================== 배열 함수 ====================
         sum: (arr: number[]) => arr.reduce((a: number, b: number) => a + b, 0),
+        avg: (arr: number[]) => arr.reduce((a: number, b: number) => a + b, 0) / arr.length,
+        min: (arr: number[]) => Math.min(...arr),
+        max: (arr: number[]) => Math.max(...arr),
+        len: (arr: any[]) => arr.length,
         map: (arr: any[], fn: (value: any) => any) => arr.map(fn),
         filter: (arr: any[], fn: (value: any) => boolean) => arr.filter(fn),
         reduce: (arr: any[], init: any, fn: (acc: any, val: any) => any) =>
           arr.reduce(fn, init),
         fold: (arr: any[], init: any, fn: (acc: any, val: any) => any) =>
           arr.reduce(fn, init),
-        len: (arr: any[]) => arr.length,
-        range: (start: number, end: number) =>
-          Array.from({ length: end - start + 1 }, (_, i) => start + i),
-        print: console.log,
+        first: (arr: any[]) => arr[0],
+        last: (arr: any[]) => arr[arr.length - 1],
+        slice: (arr: any[], start: number, end?: number) => arr.slice(start, end),
+        concat: (arr: any[], ...items: any[]) => arr.concat(...items),
+        reverse: (arr: any[]) => [...arr].reverse(),
+        sort: (arr: any[], fn?: (a: any, b: any) => number) =>
+          fn ? [...arr].sort(fn) : [...arr].sort(),
+        unique: (arr: any[]) => [...new Set(arr)],
+        flatten: (arr: any[], depth: number = 1) => {
+          const flat = (a: any[], d: number): any[] =>
+            d <= 0 ? a : a.reduce((acc, val) => acc.concat(Array.isArray(val) ? flat(val, d - 1) : val), []);
+          return flat(arr, depth);
+        },
+        join: (arr: any[], sep: string = ',') => arr.join(sep),
+
+        // ==================== 수학 함수 ====================
+        abs: (n: number) => Math.abs(n),
+        sqrt: (n: number) => Math.sqrt(n),
+        pow: (base: number, exp: number) => Math.pow(base, exp),
+        round: (n: number, decimals: number = 0) =>
+          Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals),
+        floor: (n: number) => Math.floor(n),
+        ceil: (n: number) => Math.ceil(n),
+        sign: (n: number) => Math.sign(n),
+
+        // ==================== 문자열 함수 ====================
+        toUpperCase: (s: string) => s.toUpperCase(),
+        toLowerCase: (s: string) => s.toLowerCase(),
+        split: (s: string, sep: string = '') => s.split(sep),
+        trim: (s: string) => s.trim(),
+        substring: (s: string, start: number, end?: number) => s.substring(start, end),
+        includes: (s: string, search: string) => s.includes(search),
+        startsWith: (s: string, prefix: string) => s.startsWith(prefix),
+        endsWith: (s: string, suffix: string) => s.endsWith(suffix),
+        replace: (s: string, search: string, replace: string) => s.replace(new RegExp(search, 'g'), replace),
+
+        // ==================== 객체/맵 함수 ====================
+        keys: (obj: any) => Object.keys(obj),
+        values: (obj: any) => Object.values(obj),
+        entries: (obj: any) => Object.entries(obj),
+
+        // ==================== 타입 함수 ====================
+        typeof: (v: any) => typeof v,
+        isArray: (v: any) => Array.isArray(v),
+        isNumber: (v: any) => typeof v === 'number',
+        isString: (v: any) => typeof v === 'string',
+        isObject: (v: any) => typeof v === 'object' && v !== null,
+        isNull: (v: any) => v === null,
+        isUndefined: (v: any) => v === undefined,
+
+        // ==================== 범위/생성 함수 ====================
+        range: (start: number, end: number, step: number = 1) =>
+          Array.from(
+            { length: Math.ceil((end - start) / step) },
+            (_, i) => start + i * step
+          ),
+        repeat: (value: any, count: number) =>
+          Array.from({ length: count }, () => value),
+        times: (count: number, fn: (i: number) => any) =>
+          Array.from({ length: count }, (_, i) => fn(i)),
+
+        // ==================== 통계 함수 ====================
+        median: (arr: number[]) => {
+          const sorted = [...arr].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        },
+        variance: (arr: number[]) => {
+          const mean = arr.reduce((a, b) => a + b) / arr.length;
+          return arr.reduce((a, b) => a + (b - mean) ** 2, 0) / arr.length;
+        },
+        stdDev: (arr: number[]) => {
+          const mean = arr.reduce((a, b) => a + b) / arr.length;
+          const variance = arr.reduce((a, b) => a + (b - mean) ** 2, 0) / arr.length;
+          return Math.sqrt(variance);
+        },
+
+        // ==================== I/O 함수 ====================
+        print: (...args: any[]) => {
+          console.log(...args);
+          return args.length === 1 ? args[0] : args;
+        },
         log: console.log,
+        stringify: (v: any) => JSON.stringify(v, null, 2),
+        parse: (s: string) => JSON.parse(s),
       },
     };
   }
