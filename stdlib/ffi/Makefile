@@ -2,9 +2,10 @@
 # Builds native bindings for libuv and system functions
 
 CC = gcc
-CFLAGS = -Wall -Wextra -fPIC -O2
-LIBUV_FLAGS = `pkg-config --cflags libuv`
-LIBUV_LIBS = `pkg-config --libs libuv`
+CFLAGS = -Wall -Wextra -fPIC -O2 -pthread
+# Use system libuv
+LIBUV_CFLAGS = -I/usr/include/node
+LIBUV_LIBS = -L/usr/lib/x86_64-linux-gnu -luv
 
 # Output
 LIB_NAME = libfreelang_ffi.so
@@ -19,7 +20,7 @@ $(LIB_NAME): $(OBJ)
 	$(CC) -shared -o $@ $^ $(LIBUV_LIBS)
 
 $(OBJ): freelang_ffi.c freelang_ffi.h
-	$(CC) $(CFLAGS) $(LIBUV_FLAGS) -c freelang_ffi.c -o $@
+	$(CC) $(CFLAGS) $(LIBUV_CFLAGS) -c freelang_ffi.c -o $@
 
 clean:
 	rm -f $(OBJ) $(LIB_NAME)
