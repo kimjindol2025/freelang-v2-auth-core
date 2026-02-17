@@ -46,7 +46,7 @@ export class AccountLinker {
    * If user doesn't exist, create new account
    * If user exists, add social account link
    */
-  async linkAccount(userInfo: UserInfo): Promise<AccountLinkingResult> {
+  linkAccount(userInfo: UserInfo): AccountLinkingResult {
     const { provider, providerUserId, email } = userInfo;
 
     // Step 1: Check if social account already linked
@@ -150,7 +150,7 @@ export class AccountLinker {
    * Unlink social account from FreeLang user
    * User can have multiple social accounts; this removes one
    */
-  async unlinkAccount(userId: string, provider: string): Promise<FreeLangUser | null> {
+  unlinkAccount(userId: string, provider: string): FreeLangUser | null {
     const user = this.users.get(userId);
     if (!user) return null;
 
@@ -177,7 +177,7 @@ export class AccountLinker {
    * Recover account using linked social account
    * If user loses email but has Google/GitHub link, they can recover via social login
    */
-  async recoverAccount(userInfo: UserInfo): Promise<FreeLangUser | null> {
+  recoverAccount(userInfo: UserInfo): FreeLangUser | null {
     const { provider, providerUserId } = userInfo;
 
     // Check if social account exists
@@ -206,7 +206,7 @@ export class AccountLinker {
    * Merge two accounts (user A has multiple social accounts)
    * Useful when user initially signs up with Google, then links GitHub
    */
-  async mergeAccounts(primaryUserId: string, secondaryUserId: string): Promise<FreeLangUser | null> {
+  mergeAccounts(primaryUserId: string, secondaryUserId: string): FreeLangUser | null {
     const primary = this.users.get(primaryUserId);
     const secondary = this.users.get(secondaryUserId);
 
