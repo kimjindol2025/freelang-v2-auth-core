@@ -59,14 +59,19 @@ export class IRGenerator {
         this.traverse(node.left, out);
         this.traverse(node.right, out);
 
+        // Special handling for string operations
+        const isStringOp =
+          node.operator === '+' &&
+          (node.left.type === 'StringLiteral' || node.right.type === 'StringLiteral');
+
         const opMap: Record<string, Op> = {
-          '+': Op.ADD,
+          '+': isStringOp ? Op.STR_CONCAT : Op.ADD,
           '-': Op.SUB,
           '*': Op.MUL,
           '/': Op.DIV,
           '%': Op.MOD,
-          '==': Op.EQ,
-          '!=': Op.NEQ,
+          '==': node.left.type === 'StringLiteral' ? Op.STR_EQ : Op.EQ,
+          '!=': node.left.type === 'StringLiteral' ? Op.STR_NEQ : Op.NEQ,
           '<': Op.LT,
           '>': Op.GT,
           '<=': Op.LTE,
@@ -177,6 +182,48 @@ export class IRGenerator {
           }
         }
         out.push({ op: Op.CALL, arg: node.callee, sub: [] });
+        break;
+
+      // ── Range/Iterator (Lazy Evaluation) ─────────────────────
+      case 'RangeLiteral':
+        this.traverse(node.start, out);
+        this.traverse(node.end, out);
+        out.push({ op: Op.ITER_INIT });
+        break;
+
+      // ── For Statement (Iterator-based Loop) ──────────────────
+      case 'ForStatement':
+        // 1. Create iterator from iterable
+        this.traverse(node.iterable, out);
+
+        // 2. Loop start address
+        const forLoopStart = out.length;
+
+        // 3. Check if iterator has next (ITER_HAS)
+        out.push({ op: Op.DUP }); // duplicate iterator for ITER_HAS
+        out.push({ op: Op.ITER_HAS });
+
+        // 4. Jump if no more elements
+        const forJmpNotIdx = out.length;
+        out.push({ op: Op.JMP_NOT, arg: 0 }); // placeholder
+
+        // 5. Get next value (ITER_NEXT)
+        out.push({ op: Op.ITER_NEXT });
+
+        // 6. Store loop variable
+        out.push({ op: Op.STORE, arg: node.variable });
+
+        // 7. Execute body
+        this.traverse(node.body, out);
+
+        // 8. Jump back to loop start
+        out.push({ op: Op.JMP, arg: forLoopStart });
+
+        // 9. Patch JMP_NOT to point to end
+        out[forJmpNotIdx].arg = out.length;
+
+        // 10. Pop iterator from stack
+        out.push({ op: Op.POP });
         break;
 
       // ── Default (unknown node type) ─────────────────────────
