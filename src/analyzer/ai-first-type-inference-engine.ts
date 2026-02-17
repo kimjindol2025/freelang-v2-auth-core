@@ -24,6 +24,10 @@ import { FunctionNameAnalysis, FunctionNameEnhancer } from './function-name-enha
 import { VariableNameAnalysis, VariableNameEnhancer } from './variable-name-enhancer';
 import { CommentInfo, CommentAnalyzer } from './comment-analyzer';
 import { AdvancedTypeInferenceEngine } from './advanced-type-inference-engine';
+import { UnionNarrowingEngine } from './union-narrowing';
+import { GenericsResolutionEngine } from './generics-resolution';
+import { ConstraintSolverEngine } from './constraint-solver';
+import { TraitEngine } from './trait-engine';
 
 export interface TypeInferenceSource {
   fromFunctionName?: FunctionNameAnalysis;

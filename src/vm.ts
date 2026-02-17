@@ -1,8 +1,10 @@
 // FreeLang v2 VM - Stack-based IR interpreter
 // Extended: Now supports strings for Project Ouroboros (Self-Hosting)
+// Phase 19: Now supports user-defined functions
 
 import { Op, Inst, VMResult, VMError } from './types';
 import { Iterator, IteratorEngine } from './engine/iterator';
+import { FunctionRegistry, LocalScope } from './parser/function-registry';
 
 const MAX_CYCLES = 100_000;
 const MAX_STACK  = 10_000;
@@ -15,6 +17,12 @@ export class VM {
   private callStack: number[] = [];  // for CALL/RET
   private callbackRegistry: Map<number, Inst[]> = new Map();  // callback_id -> bytecode
   private nextCallbackId = 0;
+  private functionRegistry?: FunctionRegistry;  // Phase 19: user-defined functions
+  private currentScope?: LocalScope;  // Phase 19: variable scoping
+
+  constructor(functionRegistry?: FunctionRegistry) {
+    this.functionRegistry = functionRegistry;
+  }
 
   run(program: Inst[]): VMResult {
     this.stack = [];
@@ -272,10 +280,52 @@ export class VM {
       }
 
       case Op.CALL: {
-        if (!inst.sub) throw new Error('call_no_sub');
-        const subResult = this.runSub(inst.sub);
-        if (!subResult.ok) throw new Error('call_failed:' + subResult.error?.detail);
-        this.pc++;
+        // Phase 19: Support both user-defined functions and legacy sub-programs
+        const funcName = inst.arg as string;
+
+        // Try user-defined function first
+        if (this.functionRegistry && funcName && this.functionRegistry.exists(funcName)) {
+          const fn = this.functionRegistry.lookup(funcName);
+          if (!fn) throw new Error('function_not_found:' + funcName);
+
+          // Get arguments from stack (right-to-left, so reverse)
+          const args: any[] = [];
+          for (let i = 0; i < fn.params.length; i++) {
+            if (this.stack.length === 0) throw new Error('stack_underflow');
+            args.unshift(this.stack.pop());
+          }
+
+          // Create function scope with parameters
+          const savedVars = this.vars;
+          this.vars = new Map(savedVars);
+          for (let i = 0; i < fn.params.length; i++) {
+            this.vars.set(fn.params[i], args[i]);
+          }
+
+          // Execute function body (generate IR and run)
+          const gen = new (require('../codegen/ir-generator').IRGenerator)();
+          const bodyIR = gen.generateIR(fn.body);
+
+          const bodyResult = this.runProgram(bodyIR);
+          const returnValue = bodyResult.value as (number | Iterator | string | undefined);
+
+          // Restore caller's variables
+          this.vars = savedVars;
+
+          // Push return value (skip if undefined)
+          if (returnValue !== undefined) {
+            this.stack.push(returnValue);
+          }
+          this.functionRegistry!.trackCall(funcName);
+          this.pc++;
+        } else if (inst.sub) {
+          // Legacy sub-program support
+          const subResult = this.runSub(inst.sub);
+          if (!subResult.ok) throw new Error('call_failed:' + subResult.error?.detail);
+          this.pc++;
+        } else {
+          throw new Error('call_no_sub');
+        }
         break;
       }
 
@@ -495,6 +545,41 @@ export class VM {
     }
     this.pc = savedPc;
     return { ok: true, value: undefined, cycles: this.cycles, ms: 0 };
+  }
+
+  /**
+   * Phase 19: Run a program IR and return its result
+   * Used for function body execution
+   */
+  private runProgram(program: Inst[]): VMResult {
+    const savedPc = this.pc;
+    const savedStack = [...this.stack];
+    this.pc = 0;
+
+    try {
+      while (this.pc < program.length) {
+        if (this.cycles++ > 100_000) {
+          this.pc = savedPc;
+          this.stack = savedStack;
+          return this.fail(Op.HALT, 1, 'cycle_limit');
+        }
+        const inst = program[this.pc];
+        if (inst.op === Op.RET || inst.op === Op.HALT) {
+          break;
+        }
+        this.exec(inst, program);
+      }
+
+      // Get return value from stack
+      const value = this.stack.length > 0 ? this.stack[this.stack.length - 1] : undefined;
+      this.pc = savedPc;
+      return { ok: true, value, cycles: this.cycles, ms: 0 };
+    } catch (e: unknown) {
+      this.pc = savedPc;
+      this.stack = savedStack;
+      const msg = e instanceof Error ? e.message : String(e);
+      return this.fail(Op.HALT, 99, msg);
+    }
   }
 
   private fail(op: Op, code: number, detail: string, ms?: number): VMResult {

@@ -61,6 +61,10 @@ export class DataFlowInferenceEngine {
   private returnTypeEngine: ReturnTypePropagationEngine | null = null;
   private parameterEngine: ParameterConstraintsEngine | null = null;
 
+  // Advanced type system engines (Phase 4)
+  private constraintSolver: ConstraintSolverEngine | null = null;
+  private traitEngine: TraitEngine | null = null;
+
   /**
    * Step 1: CallGraph 생성
    */
@@ -295,6 +299,53 @@ export class DataFlowInferenceEngine {
       overallAccuracy,
       reasonings,
     };
+  }
+
+  /**
+   * Phase 4 통합: 고급 타입 시스템 엔진들을 포함한 확장 분석
+   *
+   * Constraint Solver와 Trait Engine을 추가로 활성화
+   */
+  buildExtended(
+    functions: MinimalFunctionAST[],
+    options?: { enableConstraints?: boolean; enableTraits?: boolean }
+  ): IntegratedAnalysis & { constraints?: ConstraintSolverResult; traits?: TraitEngineResult } {
+    // 기본 분석 수행
+    const baseAnalysis = this.build(functions);
+
+    const result: any = baseAnalysis;
+
+    // Constraint Solver 통합
+    if (options?.enableConstraints) {
+      this.constraintSolver = new ConstraintSolverEngine();
+      const constraintResult = this.constraintSolver.build(functions);
+      result.constraints = constraintResult;
+
+      // 제약 만족도를 전체 정확도에 반영 (가중치 10%)
+      const constraintWeight = 0.1;
+      result.overallAccuracy = result.overallAccuracy * (1 - constraintWeight) +
+                                constraintResult.satisfactionRate * constraintWeight;
+      result.reasonings.push(
+        `Constraint satisfaction: ${(constraintResult.satisfactionRate * 100).toFixed(1)}%`
+      );
+    }
+
+    // Trait Engine 통합
+    if (options?.enableTraits) {
+      this.traitEngine = new TraitEngine();
+      const traitResult = this.traitEngine.build(functions);
+      result.traits = traitResult;
+
+      // trait 완전성을 전체 정확도에 반영 (가중치 10%)
+      const traitWeight = 0.1;
+      result.overallAccuracy = result.overallAccuracy * (1 - traitWeight) +
+                                traitResult.completeness * traitWeight;
+      result.reasonings.push(
+        `Trait completeness: ${(traitResult.completeness * 100).toFixed(1)}%`
+      );
+    }
+
+    return result;
   }
 
   /**

@@ -7,6 +7,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { IRGenerator } from '../codegen/ir-generator';
 import { VM } from '../vm';
+import { FunctionRegistry } from '../parser/function-registry';
+import { FunctionParser } from './parser';
 import { Inst, VMResult } from '../types';
 
 export interface RunResult {
@@ -83,10 +85,19 @@ function parseProgram(source: string): Record<string, any> {
 export class ProgramRunner {
   private gen: IRGenerator;
   private vm: VM;
+  private registry: FunctionRegistry;
 
-  constructor() {
+  constructor(registry?: FunctionRegistry) {
+    this.registry = registry || new FunctionRegistry();
     this.gen = new IRGenerator();
-    this.vm = new VM();
+    this.vm = new VM(this.registry);
+  }
+
+  /**
+   * Get the function registry (for accessing registered functions)
+   */
+  getRegistry(): FunctionRegistry {
+    return this.registry;
   }
 
   /**
@@ -96,13 +107,29 @@ export class ProgramRunner {
     const startTime = Date.now();
 
     try {
-      // 1. Parse source to AST
+      // 1. Parse functions from source
+      const parsed = FunctionParser.parseProgram(source);
+
+      // 2. Clear previous functions and register new ones
+      this.registry.clear();
+      for (const fnDef of parsed.functionDefs) {
+        // Convert parsed function to AST form for registry
+        this.registry.register({
+          type: 'FunctionDefinition',
+          name: fnDef.name,
+          params: fnDef.params,
+          body: parseProgram(fnDef.body) as any
+        });
+      }
+
+      // 3. Parse statements (source without functions)
+      // For now, simple implementation: parse the entire source
       const ast = parseProgram(source) as any;
 
-      // 2. Generate IR
+      // 4. Generate IR
       const ir = this.gen.generateIR(ast);
 
-      // 3. Execute on VM
+      // 5. Execute on VM
       const result = this.vm.run(ir);
 
       const executionTime = Date.now() - startTime;
