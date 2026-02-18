@@ -77,6 +77,23 @@ export interface ClosureContext {
 }
 
 /**
+ * Phase 4 Step 4: Import validation result
+ */
+export interface ImportValidationResult extends TypeCheckResult {
+  importedType?: string;              // Type of imported symbol
+  symbolType?: 'function' | 'variable'; // Type of symbol
+}
+
+/**
+ * Phase 4 Step 4: Import context (available imports)
+ */
+export interface ImportContext {
+  availableImports: Map<string, string>;  // Import name -> type
+  importedSymbols: Map<string, 'function' | 'variable'>; // Import name -> symbol type
+  moduleResolver?: any;                   // ModuleResolver instance
+}
+
+/**
  * FunctionTypeChecker: Validate type compatibility and track errors
  */
 export class FunctionTypeChecker {
@@ -1018,5 +1035,162 @@ export class FunctionTypeChecker {
    */
   createFunctionType(paramTypes: string[], returnType: string): string {
     return `fn(${paramTypes.join(', ')}) -> ${returnType}`;
+  }
+
+  /**
+   * Phase 4 Step 4: Validate import statement
+   *
+   * 임포트한 심볼이 실제로 모듈에서 내보내지는지 확인
+   *
+   * @param importName 임포트하는 심볼 이름
+   * @param moduleExports 모듈의 내보내기 맵 (심볼 이름 -> 타입)
+   * @returns 검증 결과
+   */
+  validateImport(
+    importName: string,
+    moduleExports: Map<string, { type: 'function' | 'variable'; functionType?: string }>
+  ): ImportValidationResult {
+    // Step 1: 심볼이 export 목록에 있는지 확인
+    if (!moduleExports.has(importName)) {
+      return {
+        compatible: false,
+        message: `모듈에서 '${importName}'을 내보내지 않습니다`,
+        details: {
+          expected: `Export named '${importName}'`,
+          received: `Available exports: ${Array.from(moduleExports.keys()).join(', ')}`
+        }
+      };
+    }
+
+    // Step 2: 심볼 타입 확인
+    const symbol = moduleExports.get(importName)!;
+    const importedType = symbol.functionType || 'unknown';
+
+    return {
+      compatible: true,
+      message: `'${importName}' 임포트 성공 (${symbol.type})`,
+      importedType,
+      symbolType: symbol.type
+    };
+  }
+
+  /**
+   * Phase 4 Step 4: Get exported symbol type
+   *
+   * 내보내기 심볼의 타입을 추출
+   *
+   * @param declaration 내보내기 선언 (함수 또는 변수)
+   * @returns 심볼 타입
+   */
+  getExportType(declaration: any): string {
+    if (declaration.type === 'function') {
+      // 함수 타입: fn(param1: type1, param2: type2, ...) -> returnType
+      const fn = declaration as any;
+      const paramTypes = (fn.params || []).map((p: any) => p.paramType || 'unknown');
+      const returnType = fn.returnType || 'unknown';
+      return this.createFunctionType(paramTypes, returnType);
+    } else if (declaration.type === 'variable') {
+      // 변수 타입
+      const varDecl = declaration as any;
+      return varDecl.varType || 'unknown';
+    }
+
+    return 'unknown';
+  }
+
+  /**
+   * Phase 4 Step 4: Build import context from module exports
+   *
+   * 모듈의 내보내기로부터 import 컨텍스트 생성
+   *
+   * @param moduleExports 모듈의 내보내기 배열
+   * @returns Import 컨텍스트
+   */
+  buildImportContext(moduleExports: any[]): ImportContext {
+    const availableImports = new Map<string, string>();
+    const importedSymbols = new Map<string, 'function' | 'variable'>();
+
+    for (const exportStmt of moduleExports) {
+      const decl = exportStmt.declaration;
+      const symbolName = decl.name;
+      const symbolType = decl.type === 'function' ? 'function' : 'variable';
+      const importedType = this.getExportType(decl);
+
+      availableImports.set(symbolName, importedType);
+      importedSymbols.set(symbolName, symbolType);
+    }
+
+    return {
+      availableImports,
+      importedSymbols
+    };
+  }
+
+  /**
+   * Phase 4 Step 4: Validate all imports in import statement
+   *
+   * Import 문의 모든 심볼이 올바르게 내보내지는지 확인
+   *
+   * @param importSpecifiers 임포트할 심볼들 ([{ name, alias? }])
+   * @param moduleExports 모듈의 내보내기 맵
+   * @returns 검증 결과 배열
+   */
+  validateImportSpecifiers(
+    importSpecifiers: any[],
+    moduleExports: Map<string, { type: 'function' | 'variable'; functionType?: string }>
+  ): ImportValidationResult[] {
+    return importSpecifiers.map(spec => {
+      // 원본 이름으로 검증
+      const result = this.validateImport(spec.name, moduleExports);
+
+      // alias가 있으면 alias로 매핑
+      if (spec.alias && result.compatible) {
+        result.message = `'${spec.name}'을 '${spec.alias}'로 임포트`;
+      }
+
+      return result;
+    });
+  }
+
+  /**
+   * Phase 4 Step 4: Check if symbol is defined in context
+   *
+   * 심볼이 현재 컨텍스트에 정의되어 있는지 확인
+   * (변수 또는 임포트된 심볼)
+   *
+   * @param name 심볼 이름
+   * @param context 현재 컨텍스트
+   * @param importContext Import 컨텍스트
+   * @returns 심볼이 정의되어 있으면 타입, 없으면 undefined
+   */
+  lookupSymbol(
+    name: string,
+    context: ClosureContext,
+    importContext?: ImportContext
+  ): string | undefined {
+    // Step 1: 지역 변수 확인
+    if (context.variables[name]) {
+      return context.variables[name];
+    }
+
+    // Step 2: 지역 함수 확인
+    if (context.functions[name]) {
+      const fn = context.functions[name];
+      const paramTypes = Object.values(fn.params);
+      const returnType = fn.returnType || 'unknown';
+      return this.createFunctionType(paramTypes, returnType);
+    }
+
+    // Step 3: 임포트된 심볼 확인
+    if (importContext?.availableImports.has(name)) {
+      return importContext.availableImports.get(name);
+    }
+
+    // Step 4: 부모 컨텍스트 확인 (클로저)
+    if (context.parentContext) {
+      return this.lookupSymbol(name, context.parentContext, importContext);
+    }
+
+    return undefined;
   }
 }
