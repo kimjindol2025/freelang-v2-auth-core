@@ -769,6 +769,160 @@ export const BUILTINS: Record<string, BuiltinSpec> = {
       return 0;  // SQLITE_OK
     },
   },
+
+  // Threading Built-ins (Phase 12)
+  spawn_thread: {
+    name: 'spawn_thread',
+    params: [{ name: 'task', type: 'function' }],
+    return_type: 'thread_handle',
+    c_name: 'freelang_spawn_thread',
+    headers: ['freelang_ffi.h', 'uv.h'],
+    impl: async (fn: any) => {
+      // Simulated thread execution - return immediately with pending promise
+      const id = `thread_${Math.random().toString(36).substr(2, 9)}`;
+      const handle: any = {
+        id,
+        state: 'running',
+        result: undefined,
+      };
+
+      // Execute the task and update handle when complete
+      fn().then((result: any) => {
+        handle.result = result;
+        handle.state = 'completed';
+      }).catch((error: any) => {
+        handle.error = String(error);
+        handle.state = 'failed';
+      });
+
+      return handle;
+    },
+  },
+
+  join_thread: {
+    name: 'join_thread',
+    params: [
+      { name: 'handle', type: 'thread_handle' },
+      { name: 'timeout', type: 'number' },
+    ],
+    return_type: 'any',
+    c_name: 'freelang_join_thread',
+    headers: ['freelang_ffi.h', 'uv.h'],
+    impl: async (handle: any, timeout?: number) => {
+      // Wait for thread completion with timeout
+      const startTime = Date.now();
+      const timeoutMs = timeout || 5000;
+
+      while (handle.state === 'running') {
+        const elapsed = Date.now() - startTime;
+        if (elapsed > timeoutMs) {
+          throw new Error(`Thread join timeout after ${timeoutMs}ms`);
+        }
+        // Sleep 50ms to allow async tasks to complete
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      if (handle.state === 'failed') {
+        throw new Error(handle.error || 'Thread execution failed');
+      }
+
+      return handle.result || null;
+    },
+  },
+
+  create_mutex: {
+    name: 'create_mutex',
+    params: [],
+    return_type: 'mutex',
+    c_name: 'freelang_create_mutex',
+    headers: ['freelang_ffi.h', 'pthread.h'],
+    impl: () => {
+      const mutex = {
+        id: `mutex_${Math.random().toString(36).substr(2, 9)}`,
+        locked: false,
+        lock: async function() {
+          this.locked = true;
+        },
+        unlock: function() {
+          this.locked = false;
+        },
+      };
+      return mutex;
+    },
+  },
+
+  mutex_lock: {
+    name: 'mutex_lock',
+    params: [{ name: 'mutex', type: 'mutex' }],
+    return_type: 'void',
+    c_name: 'freelang_mutex_lock',
+    headers: ['freelang_ffi.h', 'pthread.h'],
+    impl: async (mutex: any) => {
+      if (mutex) {
+        mutex.locked = true;
+      }
+    },
+  },
+
+  mutex_unlock: {
+    name: 'mutex_unlock',
+    params: [{ name: 'mutex', type: 'mutex' }],
+    return_type: 'void',
+    c_name: 'freelang_mutex_unlock',
+    headers: ['freelang_ffi.h', 'pthread.h'],
+    impl: (mutex: any) => {
+      if (mutex) {
+        mutex.locked = false;
+      }
+    },
+  },
+
+  create_channel: {
+    name: 'create_channel',
+    params: [],
+    return_type: 'channel',
+    c_name: 'freelang_create_channel',
+    headers: ['freelang_ffi.h'],
+    impl: () => {
+      return {
+        id: `channel_${Math.random().toString(36).substr(2, 9)}`,
+        messages: [],
+      };
+    },
+  },
+
+  channel_send: {
+    name: 'channel_send',
+    params: [
+      { name: 'channel', type: 'channel' },
+      { name: 'message', type: 'any' },
+    ],
+    return_type: 'void',
+    c_name: 'freelang_channel_send',
+    headers: ['freelang_ffi.h'],
+    impl: async (channel: any, message: any) => {
+      if (channel) {
+        channel.messages.push(message);
+      }
+    },
+  },
+
+  channel_recv: {
+    name: 'channel_recv',
+    params: [
+      { name: 'channel', type: 'channel' },
+      { name: 'timeout', type: 'number' },
+    ],
+    return_type: 'any',
+    c_name: 'freelang_channel_recv',
+    headers: ['freelang_ffi.h'],
+    impl: async (channel: any, timeout?: number) => {
+      if (channel && channel.messages.length > 0) {
+        return channel.messages.shift();
+      }
+      return null;
+    },
+  },
 };
 
 // ────────────────────────────────────────
