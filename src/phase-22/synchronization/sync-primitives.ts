@@ -41,12 +41,14 @@ export class Mutex {
 
   /**
    * Acquire lock (blocking)
+   * Fix: Prevent race condition and busy wait
    */
   async lock(thread_id?: number): Promise<void> {
     while (this.locked) {
-      await new Promise(resolve => {
+      await new Promise<void>(resolve => {
         this.waiting_threads.push(resolve);
       });
+      // After waking, retry acquiring lock
     }
 
     this.locked = true;
@@ -72,6 +74,8 @@ export class Mutex {
 
   /**
    * Release lock
+   * Fix: Unlock first, then wake waiting thread
+   * This prevents lost notifications and race conditions
    */
   unlock(): void {
     if (!this.locked) {
@@ -84,12 +88,15 @@ export class Mutex {
     this.release_count++;
     this.owner_thread = undefined;
 
-    // Wake up waiting thread
+    // CRITICAL: Set locked to false BEFORE waking waiters
+    // This allows waiting threads to acquire lock in their while loop
+    this.locked = false;
+
+    // Wake up ONE waiting thread
+    // That thread will retry acquiring the lock in its while loop
     if (this.waiting_threads.length > 0) {
       const waiter = this.waiting_threads.shift();
       if (waiter) waiter();
-    } else {
-      this.locked = false;
     }
   }
 

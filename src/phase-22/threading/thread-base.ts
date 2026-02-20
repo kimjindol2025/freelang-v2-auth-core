@@ -55,6 +55,7 @@ export class ThreadBase {
   protected runnable: () => Promise<void>;
   protected exception?: Error;
   protected interrupt_flag: boolean = false;
+  protected started: boolean = false; // Prevent duplicate start
 
   private static id_counter = 0;
   private static active_threads: Map<number, ThreadBase> = new Map();
@@ -79,9 +80,11 @@ export class ThreadBase {
    * Start the thread
    */
   async start(): Promise<void> {
-    if (this.state !== 'new') {
+    // Prevent duplicate start (race condition safe)
+    if (this.started) {
       throw new Error(`Thread ${this.name} already started`);
     }
+    this.started = true;
 
     this.state = 'runnable';
     this.start_time = Date.now();
@@ -214,10 +217,10 @@ export class ThreadBase {
   }
 
   /**
-   * Check if alive
+   * Check if alive (must be started and not terminated)
    */
   isAlive(): boolean {
-    return this.state !== 'terminated';
+    return this.started && this.state !== 'terminated';
   }
 
   /**

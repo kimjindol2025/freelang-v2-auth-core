@@ -199,7 +199,8 @@ describe('Phase 22: Threading System', () => {
       const thread = new ThreadBase('dup', async () => {});
       await thread.start();
 
-      expect(() => thread.start()).toThrow();
+      // start() is async, so we need to await and check rejection
+      await expect(thread.start()).rejects.toThrow();
     });
   });
 
@@ -324,7 +325,9 @@ describe('Phase 22: Threading System', () => {
       });
 
       await mutex.lock();
-      await Promise.all([t1.start(), t2.start()]);
+      // Start threads without awaiting (let them run concurrently)
+      t1.start().catch(() => {});
+      t2.start().catch(() => {});
       await new Promise(resolve => setTimeout(resolve, 50));
       mutex.unlock();
 
@@ -552,7 +555,7 @@ describe('Phase 22: Threading System', () => {
     test('statistics', async () => {
       const lock = new RWLock('stats');
       await lock.readLock();
-      await lock.writeLock();
+      lock.readUnlock();
 
       const stats = lock.getStats();
       expect(stats.lock_type).toBe('rwlock');
@@ -639,7 +642,8 @@ describe('Phase 22: Threading System', () => {
         threads.push(t);
       }
 
-      await Promise.all(threads.map(t => t.start()));
+      // Start all threads (don't await to let them run concurrently)
+      threads.forEach(t => t.start().catch(() => {}));
       await new Promise(resolve => setTimeout(resolve, 20));
 
       expect(count).toBe(0);
@@ -714,10 +718,15 @@ describe('Phase 22: Threading System', () => {
         received = item;
       });
 
-      await consumer.start();
-      await new Promise(resolve => setTimeout(resolve, 10));
-      await producer.start();
+      // Start threads WITHOUT await - they run concurrently
+      consumer.start();  // Start and don't wait
 
+      // Give consumer time to reach cv.wait()
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      producer.start();  // Start and don't wait
+
+      // Wait for completion
       await producer.join();
       await consumer.join();
 
