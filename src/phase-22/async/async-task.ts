@@ -31,14 +31,17 @@ export class AsyncTask<T> {
 
   constructor(fn?: (resolve: (value: T) => void, reject: (error: Error) => void) => void) {
     if (fn) {
-      try {
-        fn(
-          (value: T) => this.resolve(value),
-          (error: Error) => this.reject(error)
-        );
-      } catch (error: any) {
-        this.reject(error);
-      }
+      // Execute executor asynchronously to allow state checks before execution
+      Promise.resolve().then(() => {
+        try {
+          fn(
+            (value: T) => this.resolve(value),
+            (error: Error) => this.reject(error)
+          );
+        } catch (error: any) {
+          this.reject(error);
+        }
+      });
     }
   }
 

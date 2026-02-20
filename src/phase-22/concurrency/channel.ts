@@ -48,14 +48,18 @@ export class Channel<T> {
 
   /**
    * Send message (blocking if full)
+   * Fix: For unbuffered channels, capacity=0 but we can hold 1 message temporarily
    */
   async send(value: T): Promise<void> {
     if (this.closed) {
       throw new Error('Cannot send on closed channel');
     }
 
-    // Wait if buffer is full
-    while (this.buffer.length >= this.capacity) {
+    // Wait if buffer is full (adjusted for unbuffered channels)
+    // For unbuffered (capacity=0): allow 1 message while receiver consumes it
+    // For buffered: respect the capacity limit
+    const max_capacity = this.mode === 'unbuffered' ? 1 : this.capacity;
+    while (this.buffer.length >= max_capacity) {
       await new Promise(resolve => {
         this.senders_waiting.push(resolve);
       });
@@ -77,6 +81,7 @@ export class Channel<T> {
 
   /**
    * Receive message (blocking if empty)
+   * Fix: Properly handle unbuffered channels with temporary buffer
    */
   async recv(): Promise<T | undefined> {
     // Wait if buffer is empty
@@ -85,15 +90,17 @@ export class Channel<T> {
         return undefined;
       }
 
-      await new Promise(resolve => {
+      await new Promise<void>(resolve => {
         this.receivers_waiting.push(resolve);
       });
+
+      // After waking, retry checking buffer
     }
 
     const value = this.buffer.shift();
     this.recv_count++;
 
-    // Wake up waiting sender
+    // Wake up waiting sender so it can send next message
     if (this.senders_waiting.length > 0) {
       const sender = this.senders_waiting.shift();
       if (sender) sender();
