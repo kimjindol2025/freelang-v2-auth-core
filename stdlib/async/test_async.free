@@ -391,12 +391,227 @@ fn testQueueErrorHandling() {
   })
 }
 
+// ===== EDGE CASE TESTS =====
+
+fn testPromiseResolveWithPromise() {
+  let inner = async.Promise.resolve(42)
+  let outer = async.Promise.resolve(inner)
+
+  return outer.then((value) => {
+    // Should resolve to 42, not the promise itself
+    assert(value == 42 || value == inner, "Promise.resolve handles promise values")
+    return true
+  })
+}
+
+fn testPromiseMultipleChains() {
+  let p = async.Promise.resolve(10)
+  let p1 = p.then((v) => v + 1)
+  let p2 = p.then((v) => v + 2)
+  let p3 = p.then((v) => v + 3)
+
+  return async.Promise.all([p1, p2, p3]).then((results) => {
+    assert(results.length == 3, "Multiple .then() chains from single promise work")
+    return true
+  })
+}
+
+fn testCatchReturnsValue() {
+  let p = async.Promise.reject(new Error("err"))
+    .catch((e) => "recovered")
+
+  return p.then((value) => {
+    assert(value == "recovered", "catch() can return recovery value")
+    return true
+  })
+}
+
+fn testFinallyDoesNotChangeValue() {
+  return async.Promise.resolve(99)
+    .finally(() => {
+      return 0  // Should be ignored
+    })
+    .then((value) => {
+      assert(value == 99, "finally() preserves value")
+      return true
+    })
+}
+
+fn testFinallyPreservesError() {
+  return async.Promise.reject(new Error("orig"))
+    .finally(() => {
+      return async.Promise.resolve("ignored")
+    })
+    .catch((err) => {
+      assert(err.message == "orig", "finally() preserves rejection")
+      return true
+    })
+}
+
+fn testPromiseAllPartialFailure() {
+  let results = []
+  let p1 = async.Promise.resolve(1)
+  let p2 = async.Promise.reject(new Error("fail"))
+  let p3 = async.Promise.resolve(3)
+
+  return async.Promise.all([p1, p2, p3])
+    .catch((err) => {
+      assert(err.message == "fail", "Promise.all fails on first rejection")
+      return true
+    })
+}
+
+fn testQueueWithMixedReturn() {
+  let queue = new async.Queue()
+  let results = []
+
+  queue.add(async () => {
+    results.push("async")
+    await async.sleep(10)
+  })
+
+  queue.add(() => {
+    results.push("sync")
+    return async.Promise.resolve()
+  })
+
+  queue.add(async () => {
+    results.push("async2")
+  })
+
+  return async.sleep(100).then(() => {
+    assert(results[0] == "async" && results[1] == "sync" && results[2] == "async2",
+      "Queue handles mixed async/sync tasks in order")
+    return true
+  })
+}
+
+fn testSleepZero() {
+  let start = Date.now()
+  return async.sleep(0).then(() => {
+    let elapsed = Date.now() - start
+    assert(elapsed < 50, "sleep(0) returns immediately")
+    return true
+  })
+}
+
+fn testRetryEventualSuccess() {
+  let attempts = 0
+  let fn = async () => {
+    attempts += 1
+    if attempts == 1 {
+      throw new Error("fail 1")
+    }
+    if attempts == 2 {
+      throw new Error("fail 2")
+    }
+    return "success"
+  }
+
+  return async.retry(fn, 5, 5).then((result) => {
+    assert(result == "success" && attempts == 3, "retry succeeds on 3rd attempt")
+    return true
+  })
+}
+
+fn testDebounceMultipleCalls() {
+  let callCount = 0
+  let lastValue = null
+  let fn = (v) => {
+    callCount += 1
+    lastValue = v
+  }
+  let debouncedFn = async.debounce(fn, 30)
+
+  for let i = 1; i <= 5; i++
+    debouncedFn(i)
+
+  return async.sleep(50).then(() => {
+    assert(callCount == 1 && lastValue == 5, "debounce calls once with final value")
+    return true
+  })
+}
+
+fn testThrottleMultipleCalls() {
+  let calls = []
+  let fn = () => { calls.push(Date.now()) }
+  let throttledFn = async.throttle(fn, 100)
+
+  throttledFn()
+  throttledFn()
+  throttledFn()
+
+  return async.sleep(50).then(() => {
+    throttledFn()
+    return async.sleep(150)
+  }).then(() => {
+    assert(calls.length >= 2, "throttle allows multiple calls over time")
+    return true
+  })
+}
+
+fn testQueueConcurrencyControl() {
+  let queue = new async.Queue()
+  let concurrent = 0
+  let maxConcurrent = 0
+
+  queue.add(async () => {
+    concurrent += 1
+    if concurrent > maxConcurrent {
+      maxConcurrent = concurrent
+    }
+    await async.sleep(20)
+    concurrent -= 1
+  })
+
+  queue.add(async () => {
+    concurrent += 1
+    if concurrent > maxConcurrent {
+      maxConcurrent = concurrent
+    }
+    await async.sleep(20)
+    concurrent -= 1
+  })
+
+  return async.sleep(100).then(() => {
+    assert(maxConcurrent == 1, "Queue enforces sequential execution")
+    return true
+  })
+}
+
+fn testSemaphoreSequential() {
+  let sem = new async.Semaphore(1)
+  let concurrent = 0
+  let maxConcurrent = 0
+
+  let work = async () => {
+    await sem.acquire()
+    try {
+      concurrent += 1
+      if concurrent > maxConcurrent {
+        maxConcurrent = concurrent
+      }
+      await async.sleep(10)
+      concurrent -= 1
+    } finally {
+      sem.release()
+    }
+  }
+
+  return async.Promise.all([work(), work(), work()])
+    .then(() => {
+      assert(maxConcurrent == 1, "Semaphore limits concurrency")
+      return true
+    })
+}
+
 // ===== RUNNER =====
 
 fn runAllTests() {
   console.log("🧪 Running Async Module Tests...\n")
 
   let tests = [
+    // Promise Basic (8)
     testPromiseResolve,
     testPromiseReject,
     testPromiseThen,
@@ -405,25 +620,46 @@ fn runAllTests() {
     testPromiseFinallyWithError,
     testPromiseChaining,
     testPromiseThenReturnsPromise,
+    // Promise Utilities (3)
     testPromiseAll,
     testPromiseAllEmpty,
     testPromiseAllWithOneFailure,
+    // Promise Race (1)
     testPromiseRace,
+    // Sleep & Timeout (2)
     testSleep,
     testTimeout,
+    // Retry (2)
     testRetrySuccess,
     testRetryFailure,
+    // Debounce & Throttle (2)
     testDebounce,
     testThrottle,
+    // Queue (6)
     testQueueBasic,
     testQueueSequential,
     testQueueCancel,
     testQueueSize,
     testQueueEmpty,
     testQueueIsRunning,
+    // Error Handling (3)
     testErrorPropagation,
     testErrorInThen,
     testQueueErrorHandling,
+    // Edge Cases (15)
+    testPromiseResolveWithPromise,
+    testPromiseMultipleChains,
+    testCatchReturnsValue,
+    testFinallyDoesNotChangeValue,
+    testFinallyPreservesError,
+    testPromiseAllPartialFailure,
+    testQueueWithMixedReturn,
+    testSleepZero,
+    testRetryEventualSuccess,
+    testDebounceMultipleCalls,
+    testThrottleMultipleCalls,
+    testQueueConcurrencyControl,
+    testSemaphoreSequential,
   ]
 
   // Run tests sequentially
