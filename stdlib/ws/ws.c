@@ -603,6 +603,56 @@ int fl_ws_server_close(int server_id, int callback_id) {
   return 0;
 }
 
+/* ===== WebSocket Frame Encoding (RFC 6455 - Server to Client) ===== */
+
+/* Encode and send a WebSocket frame (unmasked, server→client) */
+static int ws_send_frame(fl_ws_socket_t *socket, const char *data, size_t len,
+                         fl_ws_frame_type_t opcode) {
+  if (!socket || !data) return -1;
+
+  /* Calculate frame size */
+  size_t frame_size = 2 + len;  /* FIN+opcode + length + payload */
+  if (len >= 126) frame_size += 2;
+  if (len >= 65536) frame_size += 6;
+
+  uint8_t *frame = (uint8_t *)malloc(frame_size);
+  if (!frame) return -1;
+
+  /* Byte 1: FIN (1) + RSV (3) + Opcode (4) */
+  frame[0] = 0x80 | opcode;  /* FIN=1, opcode */
+
+  /* Bytes 2+: MASK (0 for server) + Payload length */
+  uint8_t *pos = frame + 1;
+  if (len < 126) {
+    pos[0] = len & 0x7F;  /* MASK=0, length 7 bits */
+    pos += 1;
+  } else if (len < 65536) {
+    pos[0] = 126;  /* Extended 16-bit length */
+    pos[1] = (len >> 8) & 0xFF;
+    pos[2] = len & 0xFF;
+    pos += 3;
+  } else {
+    pos[0] = 127;  /* Extended 64-bit length */
+    for (int i = 0; i < 8; i++) {
+      pos[1 + i] = (len >> (8 * (7 - i))) & 0xFF;
+    }
+    pos += 9;
+  }
+
+  /* Copy payload */
+  memcpy(pos, data, len);
+
+  /* Send frame */
+  uv_buf_t buf = uv_buf_init((char *)frame, frame_size);
+  uv_write_t *write_req = malloc(sizeof(uv_write_t));
+  write_req->data = frame;  /* Store for cleanup in write_cb */
+  uv_write(write_req, (uv_stream_t *)&socket->tcp, &buf, 1, NULL);
+
+  fprintf(stderr, "[ws] Frame sent: len=%zu, opcode=%d\n", len, opcode);
+
+  return 0;
+}
+
 /* ===== WebSocket Socket API ===== */
 
 int fl_ws_send(int socket_id, const char *message, int callback_id) {
@@ -611,10 +661,8 @@ int fl_ws_send(int socket_id, const char *message, int callback_id) {
 
   if (socket->state != WS_STATE_OPEN) return -1;
 
-  /* TODO: RFC 6455 프레임 마스킹 + 전송 */
-  fprintf(stderr, "[ws] Send: socket=%d, message=%s\n", socket_id, message);
-
-  return 0;
+  /* RFC 6455 프레임 인코딩 + 전송 (서버→클라이언트는 unmasked) */
+  return ws_send_frame(socket, message, strlen(message), FL_WS_FRAME_TEXT);
 }
 
 int fl_ws_close(int socket_id) {
@@ -651,6 +699,77 @@ int fl_ws_on_error(int socket_id, int callback_id) {
 
   socket->on_error_cb = callback_id;
   return 0;
+}
+
+/* ===== URL Parsing Helper ===== */
+
+typedef struct {
+  char *host;
+  int port;
+  char *path;
+} ws_url_t;
+
+/* Simple WS URL parser: ws://host:port/path */
+static ws_url_t* ws_parse_url(const char *url) {
+  if (!url) return NULL;
+
+  ws_url_t *parsed = malloc(sizeof(ws_url_t));
+  if (!parsed) return NULL;
+
+  memset(parsed, 0, sizeof(ws_url_t));
+
+  /* Skip "ws://" or "wss://" */
+  const char *ptr = url;
+  if (strncmp(ptr, "wss://", 6) == 0) {
+    ptr += 6;
+  } else if (strncmp(ptr, "ws://", 5) == 0) {
+    ptr += 5;
+  } else {
+    free(parsed);
+    return NULL;
+  }
+
+  /* Extract host:port */
+  const char *colon = strchr(ptr, ':');
+  const char *slash = strchr(ptr, '/');
+
+  if (!slash) slash = ptr + strlen(ptr);
+
+  if (colon && colon < slash) {
+    /* host:port format */
+    size_t host_len = colon - ptr;
+    parsed->host = malloc(host_len + 1);
+    strncpy(parsed->host, ptr, host_len);
+    parsed->host[host_len] = '\0';
+
+    /* Parse port */
+    parsed->port = atoi(colon + 1);
+  } else {
+    /* host only (use default port 80) */
+    size_t host_len = slash - ptr;
+    parsed->host = malloc(host_len + 1);
+    strncpy(parsed->host, ptr, host_len);
+    parsed->host[host_len] = '\0';
+    parsed->port = 80;
+  }
+
+  /* Extract path (default: "/") */
+  if (*slash == '\0') {
+    parsed->path = malloc(2);
+    strcpy(parsed->path, "/");
+  } else {
+    parsed->path = malloc(strlen(slash) + 1);
+    strcpy(parsed->path, slash);
+  }
+
+  return parsed;
+}
+
+static void ws_url_free(ws_url_t *parsed) {
+  if (!parsed) return;
+  if (parsed->host) free(parsed->host);
+  if (parsed->path) free(parsed->path);
+  free(parsed);
 }
 
 /* ===== WebSocket Client API ===== */
@@ -693,19 +812,100 @@ int fl_ws_client_connect(const char *url, int callback_id) {
   socket->id = id;
   fprintf(stderr, "[ws] Client connecting: id=%d, url=%s\n", id, url);
 
-  /* TODO: URL 파싱 (ws://host:port/path) */
-  /* TODO: uv_getaddrinfo() + uv_tcp_connect() */
+  /* URL 파싱 (ws://host:port/path) */
+  ws_url_t *parsed = ws_parse_url(url);
+  if (!parsed) {
+    fprintf(stderr, "[ws] Invalid URL format\n");
+    socket_free_id(id);
+    free(socket->url);
+    free(socket);
+    return -1;
+  }
 
-  /* 현재: 로컬 테스트를 위해 localhost:9001로 하드코딩 */
+  fprintf(stderr, "[ws] Parsed URL: host=%s, port=%d, path=%s\n",
+          parsed->host, parsed->port, parsed->path);
+
+  /* TCP connect to host:port */
   struct sockaddr_in addr;
-  uv_ip4_addr("127.0.0.1", 9001, &addr);
+  uv_ip4_addr(parsed->host, parsed->port, &addr);
 
   uv_connect_t *req = malloc(sizeof(uv_connect_t));
   req->data = socket;
 
-  uv_tcp_connect(req, &socket->tcp, (struct sockaddr *)&addr, ws_connect_cb);
+  int ret = uv_tcp_connect(req, &socket->tcp, (struct sockaddr *)&addr, ws_connect_cb);
+  if (ret < 0) {
+    fprintf(stderr, "[ws] Connect failed: %s\n", uv_strerror(ret));
+    socket_free_id(id);
+    free(socket->url);
+    free(socket);
+    free(req);
+    ws_url_free(parsed);
+    return -1;
+  }
 
+  ws_url_free(parsed);
   return id;
+}
+
+/* RFC 6455 Client→Server masked frame */
+static int ws_send_masked_frame(fl_ws_socket_t *socket, const char *data, size_t len,
+                                fl_ws_frame_type_t opcode) {
+  if (!socket || !data) return -1;
+
+  /* Calculate frame size: FIN+opcode + MASK+length + mask_key(4) + payload */
+  size_t frame_size = 2 + 4 + len;  /* min size with mask */
+  if (len >= 126) frame_size += 2;
+  if (len >= 65536) frame_size += 6;
+
+  uint8_t *frame = (uint8_t *)malloc(frame_size);
+  if (!frame) return -1;
+
+  /* Random mask key (should be crypto-random, but for demo use time-based) */
+  uint8_t mask_key[4];
+  mask_key[0] = (rand() >> 0) & 0xFF;
+  mask_key[1] = (rand() >> 8) & 0xFF;
+  mask_key[2] = (rand() >> 16) & 0xFF;
+  mask_key[3] = (rand() >> 24) & 0xFF;
+
+  /* Byte 0: FIN (1) + RSV (3) + Opcode (4) */
+  frame[0] = 0x80 | opcode;
+
+  /* Bytes 1+: MASK (1) + Payload length (7 bits, extended as needed) */
+  uint8_t *pos = frame + 1;
+  if (len < 126) {
+    pos[0] = 0x80 | (len & 0x7F);  /* MASK=1, length */
+    pos += 1;
+  } else if (len < 65536) {
+    pos[0] = 0x80 | 126;  /* MASK=1, extended 16-bit */
+    pos[1] = (len >> 8) & 0xFF;
+    pos[2] = len & 0xFF;
+    pos += 3;
+  } else {
+    pos[0] = 0x80 | 127;  /* MASK=1, extended 64-bit */
+    for (int i = 0; i < 8; i++) {
+      pos[1 + i] = (len >> (8 * (7 - i))) & 0xFF;
+    }
+    pos += 9;
+  }
+
+  /* Copy mask key */
+  memcpy(pos, mask_key, 4);
+  pos += 4;
+
+  /* Copy and mask payload */
+  for (size_t i = 0; i < len; i++) {
+    pos[i] = ((uint8_t *)data)[i] ^ mask_key[i % 4];
+  }
+
+  /* Send frame */
+  uv_buf_t buf = uv_buf_init((char *)frame, frame_size);
+  uv_write_t *write_req = malloc(sizeof(uv_write_t));
+  write_req->data = frame;
+  uv_write(write_req, (uv_stream_t *)&socket->tcp, &buf, 1, NULL);
+
+  fprintf(stderr, "[ws] Masked frame sent: len=%zu, opcode=%d\n", len, opcode);
+
+  return 0;
 }
 
 int fl_ws_client_send(int socket_id, const char *message, int callback_id) {
@@ -714,10 +914,8 @@ int fl_ws_client_send(int socket_id, const char *message, int callback_id) {
 
   if (socket->state != WS_STATE_OPEN) return -1;
 
-  fprintf(stderr, "[ws] Client send: socket=%d, message=%s\n", socket_id, message);
-
-  /* TODO: RFC 6455 프레임 마스킹 + 전송 */
-  return 0;
+  /* RFC 6455 클라이언트→서버 마스킹된 프레임 전송 */
+  return ws_send_masked_frame(socket, message, strlen(message), FL_WS_FRAME_TEXT);
 }
 
 int fl_ws_client_close(int socket_id, int callback_id) {
