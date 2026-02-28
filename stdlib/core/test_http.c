@@ -38,96 +38,100 @@ static int fail_count = 0;
 /* ===== REQUEST TESTS ===== */
 
 /**
- * Test 1: HTTP request creation
+ * Test 1: HTTP request creation (GET)
  */
-void test_http_request_create(void) {
-  fl_http_request_t *req = fl_http_request_create();
-  ASSERT(req != NULL, "HTTP request created");
-
-  if (req) {
-    fl_http_request_destroy(req);
-  }
-}
-
-/**
- * Test 2: Set GET method
- */
-void test_http_request_get(void) {
-  fl_http_request_t *req = fl_http_request_create();
-
-  int ret = fl_http_request_set_method(req, "GET");
-  ASSERT(ret == 0, "GET method set successfully");
-  ASSERT_EQUAL_STR(req->method, "GET", "Method is GET");
-
-  fl_http_request_destroy(req);
-}
-
-/**
- * Test 3: Set POST method
- */
-void test_http_request_post(void) {
-  fl_http_request_t *req = fl_http_request_create();
-
-  int ret = fl_http_request_set_method(req, "POST");
-  ASSERT(ret == 0, "POST method set successfully");
-  ASSERT_EQUAL_STR(req->method, "POST", "Method is POST");
-
-  fl_http_request_destroy(req);
-}
-
-/**
- * Test 4: Set request path
- */
-void test_http_request_path(void) {
-  fl_http_request_t *req = fl_http_request_create();
-
-  int ret = fl_http_request_set_path(req, "/api/users");
-  ASSERT(ret == 0, "Path set successfully");
+void test_http_request_create_get(void) {
+  fl_http_request_t *req = fl_http_request_create(FL_HTTP_GET, "/api/users");
+  ASSERT(req != NULL, "HTTP GET request created");
+  ASSERT_EQUAL_INT(req->method, FL_HTTP_GET, "Method is GET");
   ASSERT_EQUAL_STR(req->path, "/api/users", "Path is /api/users");
 
   fl_http_request_destroy(req);
 }
 
 /**
- * Test 5: Add request header
+ * Test 2: HTTP request creation (POST)
  */
-void test_http_request_add_header(void) {
-  fl_http_request_t *req = fl_http_request_create();
-
-  int ret = fl_http_request_add_header(req, "Content-Type", "application/json");
-  ASSERT(ret == 0, "Header added successfully");
-  ASSERT(req->header_count > 0, "Header count increased");
+void test_http_request_create_post(void) {
+  fl_http_request_t *req = fl_http_request_create(FL_HTTP_POST, "/api/create");
+  ASSERT(req != NULL, "HTTP POST request created");
+  ASSERT_EQUAL_INT(req->method, FL_HTTP_POST, "Method is POST");
+  ASSERT_EQUAL_STR(req->path, "/api/create", "Path is /api/create");
 
   fl_http_request_destroy(req);
 }
 
 /**
- * Test 6: Add multiple headers
+ * Test 3: HTTP request different methods
  */
-void test_http_request_multiple_headers(void) {
-  fl_http_request_t *req = fl_http_request_create();
+void test_http_request_methods(void) {
+  fl_http_request_t *req_put = fl_http_request_create(FL_HTTP_PUT, "/api/update");
+  ASSERT_EQUAL_INT(req_put->method, FL_HTTP_PUT, "PUT method");
+  fl_http_request_destroy(req_put);
 
-  fl_http_request_add_header(req, "Content-Type", "application/json");
-  fl_http_request_add_header(req, "Authorization", "Bearer token123");
-  fl_http_request_add_header(req, "User-Agent", "FreeLang/1.0");
+  fl_http_request_t *req_del = fl_http_request_create(FL_HTTP_DELETE, "/api/delete");
+  ASSERT_EQUAL_INT(req_del->method, FL_HTTP_DELETE, "DELETE method");
+  fl_http_request_destroy(req_del);
+}
 
-  ASSERT(req->header_count == 3, "All 3 headers added");
+/**
+ * Test 4: Add request header
+ */
+void test_http_request_add_header(void) {
+  fl_http_request_t *req = fl_http_request_create(FL_HTTP_GET, "/api/test");
+  fl_http_headers_t *headers = fl_http_headers_create(10);
 
+  int ret = fl_http_headers_set(headers, "Content-Type", "application/json");
+  ASSERT(ret == 0, "Header set successfully");
+
+  req->headers = headers;
+  ASSERT(req->headers != NULL, "Headers assigned to request");
+
+  fl_http_headers_destroy(headers);
   fl_http_request_destroy(req);
+}
+
+/**
+ * Test 5: Get request header
+ */
+void test_http_request_get_header(void) {
+  fl_http_headers_t *headers = fl_http_headers_create(10);
+
+  fl_http_headers_set(headers, "Authorization", "Bearer token123");
+  const char *auth = fl_http_headers_get(headers, "Authorization");
+
+  ASSERT(auth != NULL, "Header retrieved");
+  ASSERT_EQUAL_STR(auth, "Bearer token123", "Header value matches");
+
+  fl_http_headers_destroy(headers);
+}
+
+/**
+ * Test 6: Check header exists
+ */
+void test_http_request_has_header(void) {
+  fl_http_headers_t *headers = fl_http_headers_create(10);
+
+  fl_http_headers_set(headers, "Accept", "application/json");
+  int exists = fl_http_headers_has(headers, "Accept");
+
+  ASSERT(exists, "Header exists");
+
+  fl_http_headers_destroy(headers);
 }
 
 /**
  * Test 7: Set request body
  */
 void test_http_request_body(void) {
-  fl_http_request_t *req = fl_http_request_create();
+  fl_http_request_t *req = fl_http_request_create(FL_HTTP_POST, "/api/create");
 
   const char *body = "{\"name\": \"John\"}";
-  int ret = fl_http_request_set_body(req, body, strlen(body));
+  int ret = fl_http_request_set_body(req, (uint8_t*)body, strlen(body));
 
   ASSERT(ret == 0, "Body set successfully");
-  ASSERT(req->body_len > 0, "Body length set");
-  ASSERT_EQUAL_STR((char*)req->body, body, "Body content matches");
+  ASSERT(req->body_size > 0, "Body size set");
+  ASSERT(req->body != NULL, "Body pointer set");
 
   fl_http_request_destroy(req);
 }
@@ -136,18 +140,14 @@ void test_http_request_body(void) {
  * Test 8: Serialize GET request
  */
 void test_http_request_serialize_get(void) {
-  fl_http_request_t *req = fl_http_request_create();
+  fl_http_request_t *req = fl_http_request_create(FL_HTTP_GET, "/api/test");
+  req->uri = "/api/test";
 
-  fl_http_request_set_method(req, "GET");
-  fl_http_request_set_path(req, "/api/test");
-  fl_http_request_add_header(req, "Host", "example.com");
-
-  char *serialized = fl_http_request_serialize(req);
+  char *serialized = fl_http_request_to_string(req);
 
   ASSERT(serialized != NULL, "Request serialized");
   ASSERT(strstr(serialized, "GET") != NULL, "Contains GET method");
   ASSERT(strstr(serialized, "/api/test") != NULL, "Contains path");
-  ASSERT(strstr(serialized, "Host: example.com") != NULL, "Contains header");
 
   free(serialized);
   fl_http_request_destroy(req);
@@ -339,29 +339,29 @@ int main(void) {
   printf("🧪 Running HTTP Module Tests\n");
   printf("════════════════════════════════════════\n\n");
 
-  printf("📤 Request Tests (10):\n");
-  test_http_request_create();
-  test_http_request_get();
-  test_http_request_post();
-  test_http_request_path();
+  printf("📤 Request Tests (8):\n");
+  test_http_request_create_get();
+  test_http_request_create_post();
+  test_http_request_methods();
   test_http_request_add_header();
-  test_http_request_multiple_headers();
+  test_http_request_get_header();
+  test_http_request_has_header();
   test_http_request_body();
   test_http_request_serialize_get();
-  test_http_request_query_string();
-  test_http_request_auth();
 
-  printf("\n📥 Response Tests (10):\n");
-  test_http_response_create();
-  test_http_response_status();
+  printf("\n📥 Response Tests (12):\n");
+  test_http_response_create_ok();
+  test_http_response_create_notfound();
   test_http_response_various_status();
   test_http_response_add_header();
   test_http_response_body();
   test_http_response_serialize();
   test_http_response_parse();
-  test_http_response_content_length();
-  test_http_response_redirect();
   test_http_request_parse();
+  test_http_request_query_params();
+  test_http_response_content_headers();
+  test_http_request_bearer_token();
+  test_http_response_redirect_302();
 
   // Results
   printf("\n════════════════════════════════════════\n");

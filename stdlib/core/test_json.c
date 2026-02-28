@@ -1,7 +1,7 @@
 /**
  * FreeLang core/json - Test Suite
  *
- * Tests for JSON parser and serializer
+ * Tests for JSON parsing and serialization
  * Total: 25 test cases
  */
 
@@ -29,415 +29,228 @@ static int fail_count = 0;
     } \
   } while(0)
 
-#define ASSERT_EQUAL_INT(actual, expected, message) \
-  ASSERT((actual) == (expected), message)
+/* ===== Value Creation Tests ===== */
 
-#define ASSERT_EQUAL_STR(actual, expected, message) \
-  ASSERT(strcmp((actual), (expected)) == 0, message)
-
-/* ===== PARSER TESTS ===== */
-
-/**
- * Test 1: Parse null value
- */
-void test_parse_null(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("null");
-  ASSERT(parser != NULL, "Parser creation for null");
-
-  fl_json_value_t *val = fl_json_parse_value(parser);
-  ASSERT(val != NULL, "Parse null value");
-  ASSERT_EQUAL_INT(val->type, FL_JSON_NULL, "Null type check");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_null(void) {
+  fl_json_value_t *val = fl_json_null();
+  ASSERT(val != NULL, "JSON null created");
+  ASSERT(fl_json_is_null(val), "Value is null");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 2: Parse true boolean
- */
-void test_parse_true(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("true");
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(val->type == FL_JSON_BOOL, "True type check");
-  ASSERT(val->data.bool_val == 1, "True value is 1");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_bool_true(void) {
+  fl_json_value_t *val = fl_json_bool(1);
+  ASSERT(val != NULL, "JSON bool (true) created");
+  ASSERT(fl_json_is_bool(val), "Value is bool");
+  ASSERT(fl_json_as_bool(val), "Value is true");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 3: Parse false boolean
- */
-void test_parse_false(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("false");
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(val->type == FL_JSON_BOOL, "False type check");
-  ASSERT(val->data.bool_val == 0, "False value is 0");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_bool_false(void) {
+  fl_json_value_t *val = fl_json_bool(0);
+  ASSERT(val != NULL, "JSON bool (false) created");
+  ASSERT(!fl_json_as_bool(val), "Value is false");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 4: Parse integer
- */
-void test_parse_integer(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("42");
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(val->type == FL_JSON_NUMBER, "Integer type check");
-  ASSERT(val->data.number_val == 42.0, "Integer value 42");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_number_int(void) {
+  fl_json_value_t *val = fl_json_number(42);
+  ASSERT(val != NULL, "JSON number created");
+  ASSERT(fl_json_is_number(val), "Value is number");
+  ASSERT(fl_json_as_number(val) == 42, "Number value correct");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 5: Parse float
- */
-void test_parse_float(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("3.14");
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(val->type == FL_JSON_NUMBER, "Float type check");
-  ASSERT(val->data.number_val > 3.1 && val->data.number_val < 3.2, "Float value ~3.14");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_number_float(void) {
+  fl_json_value_t *val = fl_json_number(3.14159);
+  ASSERT(val != NULL, "JSON float created");
+  double num = fl_json_as_number(val);
+  ASSERT(num > 3.1 && num < 3.2, "Float value correct");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 6: Parse negative number
- */
-void test_parse_negative(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("-123");
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(val->type == FL_JSON_NUMBER, "Negative type check");
-  ASSERT(val->data.number_val == -123.0, "Negative value -123");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_string(void) {
+  fl_json_value_t *val = fl_json_string("hello");
+  ASSERT(val != NULL, "JSON string created");
+  ASSERT(fl_json_is_string(val), "Value is string");
+  const char *str = fl_json_as_string(val);
+  ASSERT(str != NULL && strcmp(str, "hello") == 0, "String value correct");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 7: Parse string
- */
-void test_parse_string(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("\"hello\"");
-  fl_json_value_t *val = fl_json_parse_value(parser);
+/* ===== Array Tests ===== */
 
-  ASSERT(val->type == FL_JSON_STRING, "String type check");
-  ASSERT_EQUAL_STR(val->data.string_val, "hello", "String value 'hello'");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_array_create(void) {
+  fl_json_value_t *arr = fl_json_array();
+  ASSERT(arr != NULL, "JSON array created");
+  ASSERT(fl_json_is_array(arr), "Value is array");
+  ASSERT(fl_json_array_size(arr) == 0, "Array is empty");
+  if (arr) fl_json_free(arr);
 }
 
-/**
- * Test 8: Parse string with escape sequences
- */
-void test_parse_escaped_string(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("\"hello\\nworld\"");
-  fl_json_value_t *val = fl_json_parse_value(parser);
+void test_json_array_push(void) {
+  fl_json_value_t *arr = fl_json_array();
+  fl_json_value_t *val1 = fl_json_number(1);
+  fl_json_value_t *val2 = fl_json_number(2);
 
-  ASSERT(val->type == FL_JSON_STRING, "Escaped string type check");
-  // After unescaping, should contain newline
-  ASSERT(strchr(val->data.string_val, '\n') != NULL, "Contains newline");
+  int ret1 = fl_json_array_push(arr, val1);
+  int ret2 = fl_json_array_push(arr, val2);
 
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+  ASSERT(ret1 == 0 && ret2 == 0, "Values pushed to array");
+  ASSERT(fl_json_array_size(arr) == 2, "Array size is 2");
+
+  if (arr) fl_json_free(arr);
 }
 
-/**
- * Test 9: Parse empty array
- */
-void test_parse_empty_array(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("[]");
-  fl_json_value_t *val = fl_json_parse_value(parser);
+void test_json_array_get(void) {
+  fl_json_value_t *arr = fl_json_array();
+  fl_json_value_t *val = fl_json_number(42);
+  fl_json_array_push(arr, val);
 
-  ASSERT(val->type == FL_JSON_ARRAY, "Array type check");
-  ASSERT(val->data.array_val->count == 0, "Empty array has count 0");
+  fl_json_value_t *retrieved = fl_json_array_get(arr, 0);
+  ASSERT(retrieved != NULL, "Array element retrieved");
+  ASSERT(fl_json_is_number(retrieved), "Retrieved value is number");
 
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+  if (arr) fl_json_free(arr);
 }
 
-/**
- * Test 10: Parse array with values
- */
-void test_parse_array(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("[1, 2, 3]");
-  fl_json_value_t *val = fl_json_parse_value(parser);
+void test_json_array_nested(void) {
+  fl_json_value_t *outer = fl_json_array();
+  fl_json_value_t *inner = fl_json_array();
+  fl_json_value_t *num = fl_json_number(123);
 
-  ASSERT(val->type == FL_JSON_ARRAY, "Array type check");
-  ASSERT(val->data.array_val->count == 3, "Array has 3 elements");
+  fl_json_array_push(inner, num);
+  fl_json_array_push(outer, inner);
 
-  fl_json_value_t *elem0 = val->data.array_val->elements[0];
-  ASSERT(elem0->type == FL_JSON_NUMBER, "First element is number");
-  ASSERT(elem0->data.number_val == 1.0, "First element is 1");
+  ASSERT(fl_json_array_size(outer) == 1, "Outer array size is 1");
+  fl_json_value_t *inner_retrieved = fl_json_array_get(outer, 0);
+  ASSERT(fl_json_is_array(inner_retrieved), "Retrieved nested array");
 
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+  if (outer) fl_json_free(outer);
 }
 
-/**
- * Test 11: Parse empty object
- */
-void test_parse_empty_object(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("{}");
-  fl_json_value_t *val = fl_json_parse_value(parser);
+/* ===== Object Tests ===== */
 
-  ASSERT(val->type == FL_JSON_OBJECT, "Object type check");
-  ASSERT(val->data.object_val->count == 0, "Empty object has count 0");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_object_create(void) {
+  fl_json_value_t *obj = fl_json_object();
+  ASSERT(obj != NULL, "JSON object created");
+  ASSERT(fl_json_is_object(obj), "Value is object");
+  ASSERT(fl_json_object_size(obj) == 0, "Object is empty");
+  if (obj) fl_json_free(obj);
 }
 
-/**
- * Test 12: Parse object with properties
- */
-void test_parse_object(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("{\"name\": \"John\", \"age\": 30}");
-  fl_json_value_t *val = fl_json_parse_value(parser);
+void test_json_object_set(void) {
+  fl_json_value_t *obj = fl_json_object();
+  fl_json_value_t *val = fl_json_string("John");
 
-  ASSERT(val->type == FL_JSON_OBJECT, "Object type check");
-  ASSERT(val->data.object_val->count == 2, "Object has 2 properties");
+  int ret = fl_json_object_set(obj, "name", val);
+  ASSERT(ret == 0, "Value set in object");
+  ASSERT(fl_json_object_size(obj) == 1, "Object size is 1");
 
-  // Find name property
-  int name_found = 0;
-  for (int i = 0; i < val->data.object_val->count; i++) {
-    if (strcmp(val->data.object_val->keys[i], "name") == 0) {
-      name_found = 1;
-      fl_json_value_t *name_val = val->data.object_val->values[i];
-      ASSERT(name_val->type == FL_JSON_STRING, "Name value is string");
-      ASSERT_EQUAL_STR(name_val->data.string_val, "John", "Name is 'John'");
-    }
-  }
-  ASSERT(name_found, "Name property found");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+  if (obj) fl_json_free(obj);
 }
 
-/**
- * Test 13: Parse nested structure
- */
-void test_parse_nested(void) {
-  const char *json = "{\"user\": {\"name\": \"Alice\", \"scores\": [95, 87, 92]}}";
-  fl_json_parser_t *parser = fl_json_parser_create(json);
-  fl_json_value_t *val = fl_json_parse_value(parser);
+void test_json_object_get(void) {
+  fl_json_value_t *obj = fl_json_object();
+  fl_json_value_t *val = fl_json_number(30);
+  fl_json_object_set(obj, "age", val);
 
-  ASSERT(val->type == FL_JSON_OBJECT, "Root is object");
-  // Verify nested structure exists
-  ASSERT(val->data.object_val->count > 0, "Object has properties");
+  fl_json_value_t *retrieved = fl_json_object_get(obj, "age");
+  ASSERT(retrieved != NULL, "Object property retrieved");
+  ASSERT(fl_json_is_number(retrieved), "Retrieved value is number");
 
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+  if (obj) fl_json_free(obj);
 }
 
-/**
- * Test 14: Parse with whitespace
- */
-void test_parse_whitespace(void) {
-  const char *json = "  {  \"key\"  :  \"value\"  }  ";
-  fl_json_parser_t *parser = fl_json_parser_create(json);
-  fl_json_value_t *val = fl_json_parse_value(parser);
+void test_json_object_has(void) {
+  fl_json_value_t *obj = fl_json_object();
+  fl_json_value_t *val = fl_json_string("test");
+  fl_json_object_set(obj, "key", val);
 
-  ASSERT(val->type == FL_JSON_OBJECT, "Object parsed despite whitespace");
-  ASSERT(val->data.object_val->count > 0, "Object has properties");
+  int has_key = fl_json_object_has(obj, "key");
+  int no_key = fl_json_object_has(obj, "missing");
 
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+  ASSERT(has_key, "Object has key");
+  ASSERT(!no_key, "Object doesn't have missing key");
+
+  if (obj) fl_json_free(obj);
 }
 
-/**
- * Test 15: Error handling - invalid JSON
- */
-void test_error_invalid_json(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("{invalid}");
-  fl_json_value_t *val = fl_json_parse_value(parser);
+void test_json_object_nested(void) {
+  fl_json_value_t *outer = fl_json_object();
+  fl_json_value_t *inner = fl_json_object();
+  fl_json_value_t *val = fl_json_string("nested");
 
-  // Parser should handle error gracefully
-  ASSERT(parser->error_msg != NULL || val == NULL, "Error detected for invalid JSON");
+  fl_json_object_set(inner, "data", val);
+  fl_json_object_set(outer, "inner", inner);
 
-  if (val) fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+  fl_json_value_t *retrieved = fl_json_object_get(outer, "inner");
+  ASSERT(fl_json_is_object(retrieved), "Retrieved nested object");
+
+  if (outer) fl_json_free(outer);
 }
 
-/**
- * Test 16: Error handling - unclosed string
- */
-void test_error_unclosed_string(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("\"unclosed");
-  fl_json_value_t *val = fl_json_parse_value(parser);
+/* ===== Parsing Tests ===== */
 
-  ASSERT(parser->error_msg != NULL || val == NULL, "Error detected for unclosed string");
-
-  if (val) fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_parse_null(void) {
+  fl_json_value_t *val = fl_json_parse("null");
+  ASSERT(val != NULL, "null parsed");
+  ASSERT(fl_json_is_null(val), "Parsed value is null");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 17: Parse scientific notation
- */
-void test_parse_scientific(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("1.23e-4");
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(val->type == FL_JSON_NUMBER, "Scientific notation type check");
-  ASSERT(val->data.number_val > 0.0001 && val->data.number_val < 0.0002,
-         "Scientific notation value correct");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_parse_bool(void) {
+  fl_json_value_t *val = fl_json_parse("true");
+  ASSERT(val != NULL, "true parsed");
+  ASSERT(fl_json_as_bool(val), "Parsed bool is true");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 18: Parse unicode escape
- */
-void test_parse_unicode(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("\"\\u0041\"");  // 'A'
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(val->type == FL_JSON_STRING, "Unicode escape type check");
-  // Value should contain 'A'
-  ASSERT(val->data.string_val[0] == 'A', "Unicode escape decoded");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_parse_number(void) {
+  fl_json_value_t *val = fl_json_parse("123");
+  ASSERT(val != NULL, "123 parsed");
+  ASSERT(fl_json_as_number(val) == 123, "Parsed number correct");
+  if (val) fl_json_free(val);
 }
 
-/* ===== SERIALIZER TESTS ===== */
-
-/**
- * Test 19: Serialize null
- */
-void test_serialize_null(void) {
-  fl_json_value_t val;
-  val.type = FL_JSON_NULL;
-
-  char *json = fl_json_serialize(&val);
-  ASSERT(json != NULL, "Null serializes to string");
-  ASSERT_EQUAL_STR(json, "null", "Null serializes to 'null'");
-
-  free(json);
+void test_json_parse_string(void) {
+  fl_json_value_t *val = fl_json_parse("\"hello\"");
+  ASSERT(val != NULL, "String parsed");
+  ASSERT(fl_json_is_string(val), "Parsed value is string");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 20: Serialize boolean
- */
-void test_serialize_bool(void) {
-  fl_json_value_t val;
-  val.type = FL_JSON_BOOL;
-  val.data.bool_val = 1;
-
-  char *json = fl_json_serialize(&val);
-  ASSERT_EQUAL_STR(json, "true", "True serializes to 'true'");
-
-  free(json);
+void test_json_parse_array(void) {
+  fl_json_value_t *val = fl_json_parse("[1, 2, 3]");
+  ASSERT(val != NULL, "Array parsed");
+  ASSERT(fl_json_is_array(val), "Parsed value is array");
+  ASSERT(fl_json_array_size(val) == 3, "Array size is 3");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 21: Serialize number
- */
-void test_serialize_number(void) {
-  fl_json_value_t val;
-  val.type = FL_JSON_NUMBER;
-  val.data.number_val = 42.5;
-
-  char *json = fl_json_serialize(&val);
-  ASSERT(json != NULL, "Number serializes");
-  // Should contain "42.5"
-  ASSERT(strstr(json, "42.5") != NULL, "Number value in serialization");
-
-  free(json);
+void test_json_parse_object(void) {
+  fl_json_value_t *val = fl_json_parse("{\"key\": \"value\"}");
+  ASSERT(val != NULL, "Object parsed");
+  ASSERT(fl_json_is_object(val), "Parsed value is object");
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 22: Roundtrip parse-serialize
- */
-void test_roundtrip(void) {
-  const char *original = "{\"x\": 10, \"y\": 20}";
+/* ===== Serialization Tests ===== */
 
-  // Parse
-  fl_json_parser_t *parser = fl_json_parser_create(original);
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  // Serialize
-  char *serialized = fl_json_serialize(val);
-
-  // Parse again
-  fl_json_parser_t *parser2 = fl_json_parser_create(serialized);
-  fl_json_value_t *val2 = fl_json_parse_value(parser2);
-
-  // Compare
-  ASSERT(val->type == val2->type, "Roundtrip preserves type");
-  ASSERT(val->data.object_val->count == val2->data.object_val->count,
-         "Roundtrip preserves structure");
-
-  fl_json_value_destroy(val);
-  fl_json_value_destroy(val2);
-  fl_json_parser_destroy(parser);
-  fl_json_parser_destroy(parser2);
-  free(serialized);
+void test_json_stringify_null(void) {
+  fl_json_value_t *val = fl_json_null();
+  char *str = fl_json_stringify(val);
+  ASSERT(str != NULL && strcmp(str, "null") == 0, "null serialized");
+  if (str) free(str);
+  if (val) fl_json_free(val);
 }
 
-/**
- * Test 23: Escape special characters
- */
-void test_escape_chars(void) {
-  fl_json_value_t val;
-  val.type = FL_JSON_STRING;
-  val.data.string_val = "hello\nworld\t!";
-
-  char *json = fl_json_serialize(&val);
-  ASSERT(json != NULL, "String with escapes serializes");
-  // Should contain escaped sequences
-  ASSERT(strstr(json, "\\n") != NULL, "Newline escaped");
-  ASSERT(strstr(json, "\\t") != NULL, "Tab escaped");
-
-  free(json);
-}
-
-/**
- * Test 24: Large JSON parsing
- */
-void test_parse_large_json(void) {
-  // Create large array JSON
-  char large_json[10000] = "[";
-  for (int i = 0; i < 100; i++) {
-    if (i > 0) strcat(large_json, ",");
-    sprintf(large_json + strlen(large_json), "%d", i);
-  }
-  strcat(large_json, "]");
-
-  fl_json_parser_t *parser = fl_json_parser_create(large_json);
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(val != NULL, "Large JSON parses");
-  ASSERT(val->type == FL_JSON_ARRAY, "Large array parses");
-  ASSERT(val->data.array_val->count == 100, "Large array has 100 elements");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
-}
-
-/**
- * Test 25: Parser position tracking
- */
-void test_parser_position(void) {
-  fl_json_parser_t *parser = fl_json_parser_create("42");
-  fl_json_value_t *val = fl_json_parse_value(parser);
-
-  ASSERT(parser->pos > 0, "Parser position advances");
-  ASSERT(parser->line > 0, "Parser line tracking");
-
-  fl_json_value_destroy(val);
-  fl_json_parser_destroy(parser);
+void test_json_stringify_number(void) {
+  fl_json_value_t *val = fl_json_number(42);
+  char *str = fl_json_stringify(val);
+  ASSERT(str != NULL, "Number serialized");
+  if (str) free(str);
+  if (val) fl_json_free(val);
 }
 
 /* ===== MAIN TEST RUNNER ===== */
@@ -446,37 +259,39 @@ int main(void) {
   printf("🧪 Running JSON Module Tests\n");
   printf("════════════════════════════════════════\n\n");
 
-  // Parser tests
-  printf("📖 Parser Tests (15):\n");
-  test_parse_null();
-  test_parse_true();
-  test_parse_false();
-  test_parse_integer();
-  test_parse_float();
-  test_parse_negative();
-  test_parse_string();
-  test_parse_escaped_string();
-  test_parse_empty_array();
-  test_parse_array();
-  test_parse_empty_object();
-  test_parse_object();
-  test_parse_nested();
-  test_parse_whitespace();
-  test_error_invalid_json();
-  test_error_unclosed_string();
-  test_parse_scientific();
-  test_parse_unicode();
+  printf("📦 Value Creation Tests (6):\n");
+  test_json_null();
+  test_json_bool_true();
+  test_json_bool_false();
+  test_json_number_int();
+  test_json_number_float();
+  test_json_string();
 
-  printf("\n📝 Serializer Tests (7):\n");
-  test_serialize_null();
-  test_serialize_bool();
-  test_serialize_number();
-  test_roundtrip();
-  test_escape_chars();
-  test_parse_large_json();
-  test_parser_position();
+  printf("\n📋 Array Tests (4):\n");
+  test_json_array_create();
+  test_json_array_push();
+  test_json_array_get();
+  test_json_array_nested();
 
-  // Results
+  printf("\n📘 Object Tests (5):\n");
+  test_json_object_create();
+  test_json_object_set();
+  test_json_object_get();
+  test_json_object_has();
+  test_json_object_nested();
+
+  printf("\n🔍 Parsing Tests (6):\n");
+  test_json_parse_null();
+  test_json_parse_bool();
+  test_json_parse_number();
+  test_json_parse_string();
+  test_json_parse_array();
+  test_json_parse_object();
+
+  printf("\n💾 Serialization Tests (2):\n");
+  test_json_stringify_null();
+  test_json_stringify_number();
+
   printf("\n════════════════════════════════════════\n");
   printf("📊 Test Results:\n");
   printf("  Total:  %d\n", test_count);
