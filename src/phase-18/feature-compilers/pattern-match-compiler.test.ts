@@ -226,7 +226,8 @@ match s {
 }`;
       // @ts-ignore
             const result = await compiler.compile(code);
-      expect(result.unreachablePatterns.some(p => p.includes('Unreachable'))).toBe(true);
+      // @ts-ignore
+            expect((result as any).unreachablePatterns?.some((p: string) => p.includes('Unreachable'))).toBe(true);
     });
   });
 

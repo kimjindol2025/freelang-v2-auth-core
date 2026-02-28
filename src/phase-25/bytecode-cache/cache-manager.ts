@@ -200,8 +200,8 @@ export class CacheManager<K, V> {
       return value.reduce((sum, v) => sum + this.estimateSize(v), 8);
     }
     if (typeof value === 'object') {
-      return Object.values(value).reduce(
-        (sum, v) => sum + this.estimateSize(v),
+      return Object.values(value as any).reduce<number>(
+        (sum: number, v: any) => sum + this.estimateSize(v),
         8
       );
     }

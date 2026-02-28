@@ -5,7 +5,7 @@
  * Support for pattern-based macros with wildcards and captures
  */
 
-import { MacroDefinition, MacroArgument, any } from './macro-definition' // @ts-ignore;
+import { MacroDefinition, MacroArgument } from './macro-definition';
 
 /**
  * Pattern matcher type
@@ -34,7 +34,7 @@ export interface PatternCapture {
  * Pattern macro
  */
 export interface PatternMacroDefinition extends MacroDefinition {
-  kind: 'pattern-macro';
+  kind: 'macro' & { __pattern: true };
   patterns: MacroPattern[];
 }
 

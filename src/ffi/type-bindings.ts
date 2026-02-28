@@ -361,7 +361,7 @@ export const FFI_SIGNATURES: Record<string, FFIFunctionSignature> = {
  */
 export function getTypeSize(type: string): number | 'ptr' {
   const binding = TYPE_BINDINGS[type];
-  return binding ? binding.size : 'ptr';
+  return binding ? (binding.size as number | 'ptr') : 'ptr';
 }
 
 /**

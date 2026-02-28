@@ -32,6 +32,9 @@ export { CFunctionCaller, cFunctionCaller } from './c-function-caller';
 // Loader
 export { FFILoader, ffiLoader, setupFFI, handleFFICallbacks } from './loader';
 
+// 로컬에서도 import해서 사용
+import { setupFFI } from './loader';
+
 // VM Integration (Phase 3.3: 콜백 메커니즘)
 export {
   FFISupportedVMLoop,

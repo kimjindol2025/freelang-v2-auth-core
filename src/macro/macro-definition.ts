@@ -272,7 +272,7 @@ export class MacroParser {
     return {
       type: 'macro-call',
       macroName,
-      arguments
+      arguments: args
     };
   }
 

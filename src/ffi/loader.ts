@@ -125,11 +125,12 @@ export class FFILoader {
   /**
    * 메인 루프에 통합 (FreeLang VM의 이벤트 루프에서 호출)
    */
-  public processPendingCallbacks(): void {
+  public processPendingCallbacks(): number {
     const count = processCallbacks();
     if (count > 0) {
       // console.log(`Processed ${count} callbacks`);
     }
+    return count;
   }
 
   /**
@@ -167,6 +168,6 @@ export function setupFFI(vmInstance: any): boolean {
  * 콜백 처리 함수
  * (FreeLang VM의 메인 루프에서 주기적으로 호출)
  */
-export function handleFFICallbacks(): void {
-  ffiLoader.processPendingCallbacks();
+export function handleFFICallbacks(): number {
+  return ffiLoader.processPendingCallbacks();
 }
