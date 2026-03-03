@@ -854,5 +854,214 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
     }
   });
 
+  // ────────────────────────────────────────────────────────────
+  // Phase B: HashMap / Map 함수 (8개)
+  // ────────────────────────────────────────────────────────────
+
+  registry.register({
+    name: 'map_new',
+    module: 'map',
+    executor: () => new Map()
+  });
+
+  registry.register({
+    name: 'map_set',
+    module: 'map',
+    executor: (args) => {
+      const m = args[0] as Map<any, any>;
+      m.set(args[1], args[2]);
+      return m;
+    }
+  });
+
+  registry.register({
+    name: 'map_get',
+    module: 'map',
+    executor: (args) => (args[0] as Map<any, any>).get(args[1])
+  });
+
+  registry.register({
+    name: 'map_has',
+    module: 'map',
+    executor: (args) => (args[0] as Map<any, any>).has(args[1])
+  });
+
+  registry.register({
+    name: 'map_delete',
+    module: 'map',
+    executor: (args) => {
+      (args[0] as Map<any, any>).delete(args[1]);
+      return args[0];
+    }
+  });
+
+  registry.register({
+    name: 'map_keys',
+    module: 'map',
+    executor: (args) => Array.from((args[0] as Map<any, any>).keys())
+  });
+
+  registry.register({
+    name: 'map_values',
+    module: 'map',
+    executor: (args) => Array.from((args[0] as Map<any, any>).values())
+  });
+
+  registry.register({
+    name: 'map_size',
+    module: 'map',
+    executor: (args) => (args[0] as Map<any, any>).size
+  });
+
+  // ────────────────────────────────────────────────────────────
+  // Phase B: 파일 I/O 함수 (6개)
+  // ────────────────────────────────────────────────────────────
+
+  registry.register({
+    name: 'file_read',
+    module: 'io',
+    executor: (args) => {
+      try {
+        return require('fs').readFileSync(args[0], 'utf-8');
+      } catch (e) {
+        return `ERROR: ${e.message}`;
+      }
+    }
+  });
+
+  registry.register({
+    name: 'file_write',
+    module: 'io',
+    executor: (args) => {
+      try {
+        require('fs').writeFileSync(args[0], args[1]);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+  });
+
+  registry.register({
+    name: 'file_exists',
+    module: 'io',
+    executor: (args) => {
+      try {
+        return require('fs').existsSync(args[0]);
+      } catch (e) {
+        return false;
+      }
+    }
+  });
+
+  registry.register({
+    name: 'file_delete',
+    module: 'io',
+    executor: (args) => {
+      try {
+        require('fs').unlinkSync(args[0]);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+  });
+
+  registry.register({
+    name: 'file_size',
+    module: 'io',
+    executor: (args) => {
+      try {
+        return require('fs').statSync(args[0]).size;
+      } catch (e) {
+        return -1;
+      }
+    }
+  });
+
+  registry.register({
+    name: 'file_append',
+    module: 'io',
+    executor: (args) => {
+      try {
+        require('fs').appendFileSync(args[0], args[1]);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────
+  // Phase B: OS 함수 (6개)
+  // ────────────────────────────────────────────────────────────
+
+  registry.register({
+    name: 'os_platform',
+    module: 'os',
+    executor: () => process.platform
+  });
+
+  registry.register({
+    name: 'os_arch',
+    module: 'os',
+    executor: () => process.arch
+  });
+
+  registry.register({
+    name: 'os_time',
+    module: 'os',
+    executor: () => Date.now()
+  });
+
+  registry.register({
+    name: 'os_env',
+    module: 'os',
+    executor: (args) => process.env[args[0]] || ''
+  });
+
+  registry.register({
+    name: 'os_exit',
+    module: 'os',
+    executor: (args) => {
+      process.exit(args[0] || 0);
+      return null;
+    }
+  });
+
+  registry.register({
+    name: 'os_cwd',
+    module: 'os',
+    executor: () => process.cwd()
+  });
+
+  // ────────────────────────────────────────────────────────────
+  // Phase B: 추가 배열 함수 (4개)
+  // ────────────────────────────────────────────────────────────
+
+  registry.register({
+    name: 'arr_some',
+    module: 'array',
+    executor: (args) => (args[0] as any[]).some(args[1] as any)
+  });
+
+  registry.register({
+    name: 'arr_every',
+    module: 'array',
+    executor: (args) => (args[0] as any[]).every(args[1] as any)
+  });
+
+  registry.register({
+    name: 'arr_index_of',
+    module: 'array',
+    executor: (args) => (args[0] as any[]).indexOf(args[1])
+  });
+
+  registry.register({
+    name: 'arr_last_index_of',
+    module: 'array',
+    executor: (args) => (args[0] as any[]).lastIndexOf(args[1])
+  });
+
   // Silent registration (no console output)
 }
