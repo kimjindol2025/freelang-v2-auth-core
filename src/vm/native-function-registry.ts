@@ -24,6 +24,7 @@ export interface NativeFunctionConfig {
 export class NativeFunctionRegistry {
   private functions: Map<string, NativeFunctionConfig> = new Map();
   private moduleToFunctions: Map<string, string[]> = new Map();
+  private vm?: any;  // Phase 26: VM reference for calling user-defined functions
 
   /**
    * 네이티브 함수 등록
@@ -43,6 +44,20 @@ export class NativeFunctionRegistry {
     this.moduleToFunctions.get(config.module)!.push(config.name);
 
     return true;
+  }
+
+  /**
+   * Phase 26: Set VM reference (for calling user-defined functions from native functions)
+   */
+  public setVM(vm: any): void {
+    this.vm = vm;
+  }
+
+  /**
+   * Phase 26: Get VM reference
+   */
+  public getVM(): any {
+    return this.vm;
   }
 
   /**

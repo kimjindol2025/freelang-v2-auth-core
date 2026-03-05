@@ -49,6 +49,8 @@ export class VM {
     registerStdlibFunctions(this.nativeFunctionRegistry);
     // Phase 3 Level 3: Register TCP native functions
     registerTCPFunctions(this.nativeFunctionRegistry);
+    // Phase 26: Set VM reference for higher-order functions
+    this.nativeFunctionRegistry.setVM(this);
   }
 
   /**
@@ -972,6 +974,49 @@ export class VM {
     }
   }
 
+  /**
+   * Phase 26: Execute user-defined function with arguments (for higher-order functions)
+   * Used by map/filter/reduce callbacks
+   */
+  public callUserFunction(functionName: string, args: any[]): any {
+    if (!this.functionRegistry || !this.functionRegistry.exists(functionName)) {
+      throw new Error(`Function not found: ${functionName}`);
+    }
+
+    const fn = this.functionRegistry.lookup(functionName);
+    if (!fn) throw new Error('function_lookup_failed:' + functionName);
+
+    // Save current state
+    const savedVars = this.vars;
+    this.vars = new Map(savedVars);
+
+    // Bind parameters
+    for (let i = 0; i < fn.params.length; i++) {
+      this.vars.set(fn.params[i], args[i]);
+    }
+
+    // Execute function body
+    const gen = new IRGenerator();
+    const bodyNode = fn.body || { type: 'block', body: [] };
+    const bodyIR = gen.generateIR(bodyNode);
+
+    let returnValue: any = undefined;
+    const result = this.runProgram(bodyIR);
+    returnValue = result.value;
+
+    // Restore caller's variables
+    this.vars = savedVars;
+
+    return returnValue;
+  }
+
+  /**
+   * Get native function registry (for registering callbacks)
+   */
+  public getNativeFunctionRegistry(): NativeFunctionRegistry {
+    return this.nativeFunctionRegistry;
+  }
+
   private fail(op: Op, code: number, detail: string, ms?: number): VMResult {
     return {
       ok: false,
@@ -1023,13 +1068,6 @@ export class VM {
    */
   registerNativeFunction(config: NativeFunctionConfig): boolean {
     return this.nativeFunctionRegistry.register(config);
-  }
-
-  /**
-   * Phase 3 FFI: Get native function registry
-   */
-  getNativeFunctionRegistry(): NativeFunctionRegistry {
-    return this.nativeFunctionRegistry;
   }
 
   /**

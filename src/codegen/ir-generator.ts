@@ -514,9 +514,19 @@ export class IRGenerator {
           this.traverse(memberExpr.object, out);
 
           // Push other arguments
+          // Phase 26: For higher-order functions (map, filter, reduce), if argument is an identifier,
+          // convert it to a string (function name) so the native function can call it via VM
           if (node.arguments && Array.isArray(node.arguments)) {
             for (const arg of node.arguments) {
-              this.traverse(arg, out);
+              // Check if this is a high-order method (map, filter, reduce, find) and arg is an identifier
+              if ((methodName === 'map' || methodName === 'filter' || methodName === 'reduce' || methodName === 'find') &&
+                  arg && arg.type === 'identifier') {
+                // Push function name as a string
+                out.push({ op: Op.STR_NEW, arg: arg.name });
+              } else {
+                // Normal argument
+                this.traverse(arg, out);
+              }
             }
           }
 

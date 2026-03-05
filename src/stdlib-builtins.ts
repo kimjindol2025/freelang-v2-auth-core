@@ -761,13 +761,19 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
   });
 
   // 배열: map, filter, reduce, find
+  // Phase 26: Support for user-defined function callbacks
   registry.register({
     name: 'arr_map',
     module: 'array',
     executor: (args) => {
       const arr = args[0] as any[];
-      const fn = args[1] as any;
-      return arr.map(fn);
+      const fnNameOrFunc = args[1] as any;
+      const vm = registry.getVM();
+
+      if (typeof fnNameOrFunc === 'string' && vm) {
+        return arr.map((item) => vm.callUserFunction(fnNameOrFunc, [item]));
+      }
+      return arr.map(fnNameOrFunc);
     }
   });
 
@@ -776,8 +782,16 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
     module: 'array',
     executor: (args) => {
       const arr = args[0] as any[];
-      const fn = args[1] as any;
-      return arr.filter(fn);
+      const fnNameOrFunc = args[1] as any;
+      const vm = registry.getVM();
+
+      if (typeof fnNameOrFunc === 'string' && vm) {
+        return arr.filter((item) => {
+          const result = vm.callUserFunction(fnNameOrFunc, [item]);
+          return Boolean(result);
+        });
+      }
+      return arr.filter(fnNameOrFunc);
     }
   });
 
@@ -786,9 +800,14 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
     module: 'array',
     executor: (args) => {
       const arr = args[0] as any[];
-      const fn = args[1] as any;
+      const fnNameOrFunc = args[1] as any;
       const init = args[2];
-      return arr.reduce(fn, init);
+      const vm = registry.getVM();
+
+      if (typeof fnNameOrFunc === 'string' && vm) {
+        return arr.reduce((acc, item) => vm.callUserFunction(fnNameOrFunc, [acc, item]), init);
+      }
+      return arr.reduce(fnNameOrFunc, init);
     }
   });
 
