@@ -1847,7 +1847,7 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
       const options = args[1] || {};
       return fetch(url, options as any).then(res => ({
         status: res.status,
-        headers: Object.fromEntries(res.headers),
+        headers: res.headers,
         body: res.text()
       }));
     }
@@ -1917,7 +1917,7 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
       const url = String(args[0]);
       return fetch(url, { method: 'HEAD' }).then(res => ({
         status: res.status,
-        headers: Object.fromEntries(res.headers)
+        headers: res.headers
       }));
     }
   });
