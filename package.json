@@ -5,7 +5,9 @@
   "main": "dist/cli/index.js",
   "types": "dist/cli/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "node build.js && tsc",
+    "build:ts": "tsc",
+    "build:fl": "node build.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:stage1": "ts-node test-freelang-complete.ts",
