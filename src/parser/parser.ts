@@ -221,16 +221,23 @@ export class Parser {
     // Parse all statements until EOF
     while (!this.check(TokenType.EOF)) {
       try {
-        // Phase 2: Support fn at top level
+        // Phase J: Support async fn at top level
         const curToken = this.current();
         if (process.env.DEBUG_PARSER) {
           console.log(`[PARSER] Current token: type=${curToken.type}, value="${curToken.value}"`);
         }
 
+        // Phase J: Check for async keyword
+        let isAsync = false;
+        if (this.check(TokenType.ASYNC)) {
+          isAsync = true;
+          this.advance();
+        }
+
         if (this.check(TokenType.FN)) {
-          if (process.env.DEBUG_PARSER) console.log('[PARSER] Found FN, parsing function declaration');
+          if (process.env.DEBUG_PARSER) console.log(`[PARSER] Found ${isAsync ? 'ASYNC ' : ''}FN, parsing function declaration`);
           try {
-            const fnStmt = this.parseFunctionDeclaration();
+            const fnStmt = this.parseFunctionDeclaration(isAsync);
             statements.push(fnStmt as any);
             if (process.env.DEBUG_PARSER) console.log('[PARSER] Function declaration parsed successfully');
           } catch (fnError) {
@@ -238,6 +245,9 @@ export class Parser {
             throw fnError;  // Re-throw to be caught by outer catch
           }
           continue;
+        } else if (isAsync) {
+          // async without fn is an error
+          throw new ParseError(curToken.line, curToken.column, 'Expected "fn" after "async"');
         }
 
         const stmt = this.parseStatement();
@@ -269,11 +279,13 @@ export class Parser {
 
   /**
    * Phase 2: Parse function declaration at top level
+   * Phase J: Support async functions
    *
    * Format: fn name(param1, param2, ...) { ... }
+   *         async fn name(param1, param2, ...) { ... }
    */
-  private parseFunctionDeclaration(): FunctionStatement {
-    if (process.env.DEBUG_PARSER) console.log('[parseFnDecl] Starting');
+  private parseFunctionDeclaration(isAsync: boolean = false): FunctionStatement {
+    if (process.env.DEBUG_PARSER) console.log(`[parseFnDecl] Starting (async=${isAsync})`);
     this.expect(TokenType.FN);
 
     // Function name
@@ -324,7 +336,8 @@ export class Parser {
       ...(typeParams.length > 0 && { typeParams }),
       params,
       body,
-      returnType: undefined
+      returnType: undefined,
+      async: isAsync  // Phase J: Mark as async
     };
   }
 
@@ -1226,10 +1239,7 @@ export class Parser {
 
     // Phase 2: fn 함수 선언 (지원)
     if (this.check(TokenType.FN)) {
-      const stmt = this.parseFunctionDeclaration() as any;
-      if (isAsync) {
-        stmt.async = true;
-      }
+      const stmt = this.parseFunctionDeclaration(isAsync) as any;
       return stmt;
     }
 

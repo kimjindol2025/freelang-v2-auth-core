@@ -2,6 +2,7 @@
 // Extended: Now supports strings for Project Ouroboros (Self-Hosting)
 // Phase 19: Now supports user-defined functions
 // Phase 21: Now supports type-safe execution with runtime validation
+// Phase J: Now supports async/await with SimplePromise
 
 import { Op, Inst, VMResult, VMError } from './types';
 import { Iterator, IteratorEngine } from './engine/iterator';
@@ -13,6 +14,7 @@ import { IRGenerator } from './codegen/ir-generator';
 import { registerStdlibFunctions } from './stdlib-builtins';
 import { registerTCPFunctions } from './stdlib/net/tcp-native';
 import { trackFunctionCall, isHotFunction, generateHotspotReport } from './phase-jit/hotspot-detector';
+import { SimplePromise } from './runtime/simple-promise';
 
 const MAX_CYCLES = 100_000;
 const MAX_STACK  = 10_000;
@@ -486,6 +488,7 @@ export class VM {
         // Phase 19: Support both user-defined functions and legacy sub-programs
         // Phase 21: Add type checking and validation
         // Phase 3 FFI: Support native functions (C FFI)
+        // Phase J: Support async functions
         const funcName = inst.arg as string;
 
         // Try user-defined function first
@@ -509,61 +512,113 @@ export class VM {
             this.checkTypeCompatibility(funcName, argTypes, types!.params, fn.params);
           }
 
-          // Create function scope with parameters
-          const savedVars = this.vars;
-          this.vars = new Map(savedVars);
-          for (let i = 0; i < fn.params.length; i++) {
-            this.vars.set(fn.params[i], args[i]);
-          }
+          // Phase J: If function is async, return a Promise
+          if (fn.async) {
+            const promise = new SimplePromise((resolve) => {
+              // Create function scope with parameters
+              const savedVars = this.vars;
+              this.vars = new Map(savedVars);
+              for (let i = 0; i < fn.params.length; i++) {
+                this.vars.set(fn.params[i], args[i]);
+              }
 
-          // Execute function body - Process statements individually
-          // This ensures proper variable scoping for each statement
-          const gen = new IRGenerator();
-          let returnValue: any = undefined;
+              // Execute function body
+              const gen = new IRGenerator();
+              let returnValue: any = undefined;
 
-          if (!fn.body) {
-            throw new Error('function_body_undefined:' + funcName);
-          }
+              if (!fn.body) {
+                throw new Error('function_body_undefined:' + funcName);
+              }
 
-          // Execute entire function body as a block
-          // Treat fn.body as a block-type node and process all statements together
-          const bodyNode = fn.body || { type: 'block', statements: [] };
+              const bodyNode = fn.body || { type: 'block', statements: [] };
+              if (!bodyNode.type) {
+                bodyNode.type = 'block';
+              }
 
-          // Ensure it has type 'block' for proper IR generation
-          if (!bodyNode.type) {
-            bodyNode.type = 'block';
-          }
+              const bodyIR = gen.generateIR(bodyNode);
 
-          // Generate IR for the entire block (all statements at once)
-          const bodyIR = gen.generateIR(bodyNode);
+              if (process.env.DEBUG_FUNC_BODY) {
+                console.log(`[DEBUG] Async Function ${funcName} body IR (${bodyIR.length} instructions):`);
+                bodyIR.forEach((inst, idx) => {
+                  const opName = Object.entries(Op).find(([_, v]) => v === inst.op)?.[0] || `Op(${inst.op})`;
+                  console.log(`  [${idx}] ${opName} ${inst.arg !== undefined ? inst.arg : ''}`);
+                });
+              }
 
-          // DEBUG: Log bodyIR for inspection
-          if (process.env.DEBUG_FUNC_BODY) {
-            console.log(`[DEBUG] Function ${funcName} body IR (${bodyIR.length} instructions):`);
-            bodyIR.forEach((inst, idx) => {
-              const opName = Object.entries(Op).find(([_, v]) => v === inst.op)?.[0] || `Op(${inst.op})`;
-              console.log(`  [${idx}] ${opName} ${inst.arg !== undefined ? inst.arg : ''}`);
+              const bodyResult = this.runProgram(bodyIR);
+              returnValue = bodyResult.value;
+
+              // Restore caller's variables
+              this.vars = savedVars;
+
+              // Resolve promise with return value
+              resolve(returnValue);
             });
-            console.log(`[DEBUG] Current vars before execution:`, Array.from(this.vars.keys()));
-          }
 
-          // Execute the body IR
-          const bodyResult = this.runProgram(bodyIR);
-          returnValue = bodyResult.value;
+            this.stack.push(promise);
+            this.functionRegistry!.trackCall(funcName);
+            if (funcName) {
+              trackFunctionCall(funcName);
+            }
+            this.pc++;
+          } else {
+            // Normal (sync) function execution
+            // Create function scope with parameters
+            const savedVars = this.vars;
+            this.vars = new Map(savedVars);
+            for (let i = 0; i < fn.params.length; i++) {
+              this.vars.set(fn.params[i], args[i]);
+            }
 
-          // Restore caller's variables
-          this.vars = savedVars;
+            // Execute function body - Process statements individually
+            // This ensures proper variable scoping for each statement
+            const gen = new IRGenerator();
+            let returnValue: any = undefined;
 
-          // Push return value (skip if undefined)
-          if (returnValue !== undefined) {
-            this.stack.push(returnValue);
+            if (!fn.body) {
+              throw new Error('function_body_undefined:' + funcName);
+            }
+
+            // Execute entire function body as a block
+            // Treat fn.body as a block-type node and process all statements together
+            const bodyNode = fn.body || { type: 'block', statements: [] };
+
+            // Ensure it has type 'block' for proper IR generation
+            if (!bodyNode.type) {
+              bodyNode.type = 'block';
+            }
+
+            // Generate IR for the entire block (all statements at once)
+            const bodyIR = gen.generateIR(bodyNode);
+
+            // DEBUG: Log bodyIR for inspection
+            if (process.env.DEBUG_FUNC_BODY) {
+              console.log(`[DEBUG] Function ${funcName} body IR (${bodyIR.length} instructions):`);
+              bodyIR.forEach((inst, idx) => {
+                const opName = Object.entries(Op).find(([_, v]) => v === inst.op)?.[0] || `Op(${inst.op})`;
+                console.log(`  [${idx}] ${opName} ${inst.arg !== undefined ? inst.arg : ''}`);
+              });
+              console.log(`[DEBUG] Current vars before execution:`, Array.from(this.vars.keys()));
+            }
+
+            // Execute the body IR
+            const bodyResult = this.runProgram(bodyIR);
+            returnValue = bodyResult.value;
+
+            // Restore caller's variables
+            this.vars = savedVars;
+
+            // Push return value (skip if undefined)
+            if (returnValue !== undefined) {
+              this.stack.push(returnValue);
+            }
+            this.functionRegistry!.trackCall(funcName);
+            // Phase 4: Track function call for JIT hotspot detection
+            if (funcName) {
+              trackFunctionCall(funcName);
+            }
+            this.pc++;
           }
-          this.functionRegistry!.trackCall(funcName);
-          // Phase 4: Track function call for JIT hotspot detection
-          if (funcName) {
-            trackFunctionCall(funcName);
-          }
-          this.pc++;
         }
         // Phase 3 FFI: Try native function (C FFI)
         else if (funcName && this.nativeFunctionRegistry.exists(funcName)) {

@@ -2,9 +2,12 @@
  * FreeLang v2 - stdlib 함수 자동 등록
  *
  * Phase A-E: 20개 함수 범주, 200개+ 함수 한 번에 등록
+ * Phase J: Promise support for async/await
  */
 
 import { NativeFunctionRegistry } from './vm/native-function-registry';
+import { SimplePromise } from './runtime/simple-promise';
+import { RegexObject } from './stdlib/regex/regex-impl';
 
 /**
  * stdlib 함수들을 NativeFunctionRegistry에 등록
@@ -1278,6 +1281,91 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
       const t1 = args[0] as number;
       const t2 = args[1] as number;
       return Math.abs(t2 - t1);
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────
+  // Phase J: Promise/async support
+  // ────────────────────────────────────────────────────────────
+
+  registry.register({
+    name: 'Promise.resolve',
+    module: 'promise',
+    executor: (args) => {
+      return SimplePromise.resolve(args[0]);
+    }
+  });
+
+  registry.register({
+    name: 'Promise.reject',
+    module: 'promise',
+    executor: (args) => {
+      return SimplePromise.reject(args[0]);
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────
+  // Phase L: Regular Expression support
+  // ────────────────────────────────────────────────────────────
+
+  registry.register({
+    name: 'regex_new',
+    module: 'regex',
+    executor: (args) => {
+      const patternStr = String(args[0]);
+      return new RegexObject(patternStr);
+    }
+  });
+
+  registry.register({
+    name: 'regex_test',
+    module: 'regex',
+    executor: (args) => {
+      const regex = args[0] as RegexObject;
+      const str = String(args[1]);
+      return regex.test(str);
+    }
+  });
+
+  registry.register({
+    name: 'regex_match',
+    module: 'regex',
+    executor: (args) => {
+      const regex = args[0] as RegexObject;
+      const str = String(args[1]);
+      return regex.match(str);
+    }
+  });
+
+  registry.register({
+    name: 'regex_replace',
+    module: 'regex',
+    executor: (args) => {
+      const regex = args[0] as RegexObject;
+      const str = String(args[1]);
+      const replacement = String(args[2]);
+      return regex.replace(str, replacement);
+    }
+  });
+
+  registry.register({
+    name: 'regex_split',
+    module: 'regex',
+    executor: (args) => {
+      const regex = args[0] as RegexObject;
+      const str = String(args[1]);
+      return regex.split(str);
+    }
+  });
+
+  registry.register({
+    name: 'regex_exec',
+    module: 'regex',
+    executor: (args) => {
+      const regex = args[0] as RegexObject;
+      const str = String(args[1]);
+      const result = regex.exec(str);
+      return result ? result.slice(0) : null;  // Convert to array
     }
   });
 

@@ -55,6 +55,7 @@ export enum TokenType {
   NUMBER = 'NUMBER',
   STRING = 'STRING',
   CHAR = 'CHAR',
+  REGEX = 'REGEX',  // Regular expression literal
 
   // Operators
   PLUS = 'PLUS',           // +

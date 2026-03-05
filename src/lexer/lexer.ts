@@ -16,6 +16,7 @@ export class Lexer {
   private line: number = 1;
   private column: number = 0;
   private current: string = '';
+  private lastTokenType: TokenType = TokenType.EOF;  // Track last token for regex disambiguation
 
   constructor(input: string) {
     this.input = input;
@@ -210,6 +211,49 @@ export class Lexer {
   }
 
   /**
+   * Read regex literal: /pattern/flags
+   *
+   * Regex 형식:
+   * - /pattern/flags 형식
+   * - pattern: 정규표현식 패턴
+   * - flags: g(global), i(ignore case), m(multiline) 등 선택적
+   *
+   * 예: /[0-9]+/g, /test/i, /^hello$/
+   */
+  private readRegex(): string {
+    this.readChar(); // skip opening /
+
+    let pattern = '';
+    while (this.current !== '/' && this.current !== '\0') {
+      if (this.current === '\\') {
+        pattern += this.current;
+        this.readChar();
+        if (this.position < this.input.length) {
+          pattern += this.current;
+          this.readChar();
+        }
+      } else {
+        pattern += this.current;
+        this.readChar();
+      }
+    }
+
+    if (this.current === '/') {
+      this.readChar(); // skip closing /
+    }
+
+    // Read flags (g, i, m, s, u, y, etc.)
+    let flags = '';
+    while (this.isLetter(this.current)) {
+      flags += this.current;
+      this.readChar();
+    }
+
+    // Return pattern/flags combined
+    return pattern + (flags ? '/' + flags : '');
+  }
+
+  /**
    * Check if character is letter or underscore
    */
   private isLetter(ch: string): boolean {
@@ -231,15 +275,65 @@ export class Lexer {
   }
 
   /**
-   * Create token
+   * Create token and track last token type
    */
   private makeToken(type: TokenType, value: string): Token {
+    this.lastTokenType = type;
     return {
       type,
       value,
       line: this.line,
       column: this.column - value.length
     };
+  }
+
+  /**
+   * Check if regex literal can appear in current context
+   * Regex can follow: =, (, [, {, return, throw, :, ,, ;, &&, ||, !, ?, etc.
+   */
+  private isRegexContext(): boolean {
+    // Regex can appear at start or after certain token types
+    switch (this.lastTokenType) {
+      // After assignment/operators
+      case TokenType.ASSIGN:
+      case TokenType.PLUS_ASSIGN:
+      case TokenType.MINUS_ASSIGN:
+      case TokenType.STAR_ASSIGN:
+      case TokenType.SLASH_ASSIGN:
+      case TokenType.PERCENT_ASSIGN:
+      // After delimiters
+      case TokenType.LPAREN:
+      case TokenType.LBRACKET:
+      case TokenType.LBRACE:
+      case TokenType.COMMA:
+      case TokenType.SEMICOLON:
+      case TokenType.COLON:
+      // After keywords
+      case TokenType.RETURN:
+      case TokenType.THROW:
+      case TokenType.IF:
+      case TokenType.WHILE:
+      case TokenType.FOR:
+      // After logical operators
+      case TokenType.AND:
+      case TokenType.OR:
+      case TokenType.NOT:
+      // After comparison operators
+      case TokenType.EQ:
+      case TokenType.NE:
+      case TokenType.LT:
+      case TokenType.GT:
+      case TokenType.LE:
+      case TokenType.GE:
+      // At start
+      case TokenType.EOF:
+      // After keywords that accept expression
+      case TokenType.LET:
+      case TokenType.CONST:
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**
@@ -266,6 +360,15 @@ export class Lexer {
     if (this.current === '/' && this.peekChar() === '*') {
       this.skipMultiLineComment();
       return this.nextToken();
+    }
+
+    // Handle regex literals: /pattern/flags
+    // Regex can appear after: =, (, [, {, return, throw, :, ,, ;, &&, ||, !, ?, etc.
+    if (this.current === '/' && this.isRegexContext()) {
+      const value = this.readRegex();
+      const token = this.makeToken(TokenType.REGEX, value);
+      this.lastTokenType = TokenType.REGEX;
+      return token;
     }
 
     // EOF
