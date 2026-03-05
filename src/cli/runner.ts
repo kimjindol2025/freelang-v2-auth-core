@@ -39,6 +39,7 @@ export class ProgramRunner {
     this.registry = registry || new FunctionRegistry();
     this.gen = new IRGenerator();
     this.vm = new VM(this.registry);
+    // Phase 26: VM has already set itself in native registry during construction
     // Register all stdlib functions from Phase A-H after VM creation
     registerStdlibFunctions(this.vm.getNativeFunctionRegistry());
     // Phase H: Register SQLite native functions

@@ -844,11 +844,20 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
       const fnNameOrFunc = args[1] as any;
       const vm = registry.getVM();
 
-      // If fn is a string (function name), call it via VM
       if (typeof fnNameOrFunc === 'string' && vm) {
-        return arr.map((item) => vm.callUserFunction(fnNameOrFunc, [item]));
+        try {
+          const result = arr.map((item) => vm.callUserFunction(fnNameOrFunc, [item]));
+          return result;
+        } catch (e) {
+          console.error('__method_map error:', e instanceof Error ? e.message : String(e));
+          // Return original array on error
+          return arr;
+        }
+      } else if (typeof fnNameOrFunc === 'string' && !vm) {
+        console.warn('__method_map: VM not available for function:', fnNameOrFunc);
+        return arr;
       }
-      // Otherwise, assume it's a JavaScript function
+      // JavaScript function
       return arr.map(fnNameOrFunc);
     }
   });
