@@ -17,8 +17,10 @@ import { registerAnalyticsFunctions } from './stdlib-analytics-functions';
 import { registerIntegrationFunctions } from './stdlib-integration-functions';
 import { registerUtilityFunctions } from './stdlib-utility-functions';
 import { registerSklearnFunctions } from './stdlib-sklearn';
-import { registerTeamCFunctions } from './stdlib-team-c-fileio-date';
+import { registerTeamAFunctions } from './stdlib-team-a-validation';
 import { registerTeamBFunctions } from './stdlib-team-b-string-math';
+import { registerTeamCFunctions } from './stdlib-team-c-fileio-date';
+import { registerTeamDFunctions } from './stdlib-team-d-http-db';
 import { registerTeamEFunctions } from './stdlib-team-e-async-test';
 import { registerTeamFFunctions } from './stdlib-team-f-security';
 
@@ -3032,6 +3034,14 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
   registerSklearnFunctions(registry);
 
   // ────────────────────────────────────────────────────────────
+  // Phase I: Team A - Validation/Schema Functions (95개)
+  // 20 libraries: schema, json-schema, sanitize, email, phone, credit-card,
+  // ip-address, url-validator, uuid-validator, isbn, ssn, postal-code,
+  // iban, bic, sku, gtin, domain-name, mac-address, mime-type, country-code
+  // ────────────────────────────────────────────────────────────
+  registerTeamAFunctions(registry);
+
+  // ────────────────────────────────────────────────────────────
   // Phase I: Team C - File I/O & Date/Time Functions (95개)
   // 20 libraries: fs-async, fs-buffer, fs-watcher, path-posix, path-glob,
   // symlink, fileperm, tempfile, zip-stream, file-sync, timezone, calendar,
@@ -3039,6 +3049,17 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
   // date-compare, date-utils
   // ────────────────────────────────────────────────────────────
   registerTeamCFunctions(registry);
+
+  // ────────────────────────────────────────────────────────────
+  // Phase I: Team D - HTTP & Database Functions (110개)
+  // 25 libraries: http-client, fetch-api, axios-compat, form-data, gzip,
+  // brotli, chunked-response, stream-parse, http-auth, oauth2-client, saml,
+  // json-rpc, graphql-client, soap-client, mqtt-client, amqp-client,
+  // mongodb-client, postgresql-client, mysql-client, redis-client,
+  // elasticsearch-client, influxdb-client, dynamodb-client, cassandra-client,
+  // sqlite-client
+  // ────────────────────────────────────────────────────────────
+  registerTeamDFunctions(registry);
 
   // ────────────────────────────────────────────────────────────
   // Phase J: Team B - String & Math Functions (120개)
