@@ -93,11 +93,11 @@ fn main() {
   println("---------------------------------")
 
   // 실제 vs 예측 레이블
-  let true_labels = [1, 1, 0, 1, 0, 0, 1, 1]
-  let pred_labels = [1, 1, 0, 1, 0, 1, 1, 0]
+  let y_actual = [1, 1, 0, 1, 0, 0, 1, 1]
+  let y_pred = [1, 1, 0, 1, 0, 1, 1, 0]
 
   // 혼동 행렬
-  let confusion = ml_confusion_matrix(true_labels, pred_labels)
+  let confusion = ml_confusion_matrix(y_actual, y_pred)
   println("TP: " + str(confusion.tp))
   println("TN: " + str(confusion.tn))
   println("FP: " + str(confusion.fp))
@@ -105,10 +105,10 @@ fn main() {
   println("")
 
   // 성능 지표
-  let precision = ml_precision(true_labels, pred_labels)
-  let recall = ml_recall(true_labels, pred_labels)
-  let f1 = ml_f1_score(true_labels, pred_labels)
-  let accuracy = ml_accuracy(true_labels, pred_labels)
+  let precision = ml_precision(y_actual, y_pred)
+  let recall = ml_recall(y_actual, y_pred)
+  let f1 = ml_f1_score(y_actual, y_pred)
+  let accuracy = ml_accuracy(y_actual, y_pred)
 
   println("Precision: " + str(precision))
   println("Recall: " + str(recall))
