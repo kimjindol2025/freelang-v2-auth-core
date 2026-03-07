@@ -166,6 +166,7 @@ export interface Module {
   exports: ExportStatement[];  // Export statements
   statements: Statement[];     // Other statements (functions, variables, etc.)
   lintConfig?: LintConfig;     // Native-Linter: @lint(...) 어노테이션
+  allowOrigins?: string[];     // Hardware-CORS: @allow_origin("https://...") 도메인 화이트리스트
 }
 
 /**
@@ -240,13 +241,26 @@ export interface GenericTypeParam {
   constraint?: string;    // 'Printable', 'Comparable' 등 (선택)
 }
 
+// Compile-Time-ORM: @db_table / @db_column 어노테이션 타입
+export interface ORMAnnotation {
+  name: string;                     // 'db_table' | 'db_column' | 'db_id' | 'db_auto_inc'
+  args?: Record<string, string>;    // 예: { name: 'wash_logs' } or { type: 'varchar(255)' }
+}
+
 // Phase 16: Struct Declaration
 // Reified-Type-System: typeParams 추가 → struct User<T> { id: T, name: string }
+// Compile-Time-ORM: annotations 추가 → @db_table(name: "wash_logs") struct WashLog { ... }
 export interface StructDeclaration {
   type: 'struct';
   name: string;
   typeParams?: GenericTypeParam[];   // Reified-Type-System: 제네릭 파라미터
-  fields: Array<{ name: string; fieldType?: string }>;
+  fields: Array<{
+    name: string;
+    fieldType?: string;
+    annotations?: ORMAnnotation[];   // Compile-Time-ORM: @db_id, @db_column(type: .varchar)
+  }>;
+  annotations?: ORMAnnotation[];     // Compile-Time-ORM: @db_table(name: "...") 등
+  secureToken?: SecureTokenAnnotation; // Native-Auth-Token: @secure_token(...)
 }
 
 // Reified-Type-System: 타입 별칭 선언
@@ -287,6 +301,14 @@ export interface BreakStatement {
 // Phase 16: Continue Statement
 export interface ContinueStatement {
   type: 'continue';
+}
+
+// Native-Auth-Token: @secure_token 어노테이션이 붙은 구조체 메타데이터
+// @secure_token(algo: .hmac_sha256, expires: 3600)
+// struct AuthClaims { user_id: int, role: string }
+export interface SecureTokenAnnotation {
+  algo: 'hmac_sha256' | 'sha256';  // 서명 알고리즘
+  expires: number;                  // 기본 만료 시간 (초)
 }
 
 // Secret-Link: 보안 변수 선언 (빌드 타임 주입 + 암호화 메모리)

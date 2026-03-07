@@ -18,8 +18,9 @@ import { FFIFunctionSignature } from '../ffi/type-bindings';
 /**
  * SQLite 데이터베이스 풀 관리
  * Map<db_id: number, db: Database>
+ * Compile-Time-ORM: orm-native.ts가 참조할 수 있도록 export
  */
-const sqlitePool = new Map<number, Database.Database>();
+export const sqlitePool = new Map<number, Database.Database>();
 let nextDbId = 1000;
 
 /**

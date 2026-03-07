@@ -589,6 +589,45 @@ export class Parser {
                 }
                 if (this.check(TokenType.RPAREN)) this.advance();
                 pendingAnnotations.push(`secure_token:algo=${algoValue},expires=${expiresValue}`);
+              } else if (annotName === 'rate_limit') {
+                // Native-Rate-Shield: @rate_limit(window: 1s, max: 10, burst: 5)
+                // → "rate_limit:window=1000,max=10,burst=5"
+                let windowMs = 1000;
+                let maxReq   = 10;
+                let burst    = 0; // 0 → burst=max로 처리
+                let depth = 1;
+                while (depth > 0 && !this.check(TokenType.EOF)) {
+                  if (this.check(TokenType.LPAREN)) { depth++; this.advance(); continue; }
+                  if (this.check(TokenType.RPAREN)) { depth--; if (depth === 0) break; this.advance(); continue; }
+                  if (this.check(TokenType.IDENT)) {
+                    const kw = this.advance().value;
+                    if (this.check(TokenType.COLON)) this.advance();
+                    if (kw === 'window') {
+                      if (this.check(TokenType.NUMBER)) {
+                        const num = Number(this.advance().value);
+                        // 단위: s → ×1000, ms(기본)
+                        if (this.check(TokenType.IDENT)) {
+                          const unit = this.current().value;
+                          this.advance();
+                          windowMs = unit === 's' ? num * 1000 : num;
+                        } else {
+                          windowMs = num < 100 ? num * 1000 : num;
+                        }
+                      }
+                    } else if (kw === 'max') {
+                      if (this.check(TokenType.NUMBER)) { maxReq = Number(this.advance().value); }
+                    } else if (kw === 'burst') {
+                      if (this.check(TokenType.NUMBER)) { burst = Number(this.advance().value); }
+                    }
+                  } else if (this.check(TokenType.COMMA)) {
+                    this.advance();
+                  } else {
+                    this.advance();
+                  }
+                }
+                if (this.check(TokenType.RPAREN)) this.advance();
+                const effectiveBurst = burst > 0 ? burst : maxReq;
+                pendingAnnotations.push(`rate_limit:window=${windowMs},max=${maxReq},burst=${effectiveBurst}`);
               } else if (annotName.startsWith('db_')) {
                 // Compile-Time-ORM: @db_table(name: "wash_logs") → "db_table:name=wash_logs"
                 // @db_column(type: varchar) → "db_column:type=varchar"

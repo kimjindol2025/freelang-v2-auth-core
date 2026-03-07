@@ -26,6 +26,7 @@ import { registerVCSFunctions } from '../stdlib/stdlib-vcs';
 import { installGate } from '../vcs/vcs-bridge';
 import { generateORMMeta } from '../codegen/orm-codegen';
 import { registerORMMeta } from '../stdlib/orm-native';
+import { registerRateShieldFunctions } from '../stdlib/rate-shield';
 
 export interface RunResult {
   success: boolean;
@@ -62,6 +63,8 @@ export class ProgramRunner {
     registerTeamDFunctions(this.vm.getNativeFunctionRegistry());
     // Commit-Gate: VCS stdlib (git_staged_files, vcs_lint, vcs_test 등)
     registerVCSFunctions(this.vm.getNativeFunctionRegistry());
+    // Native-Rate-Shield: shield_init/check/stats/reset/delete
+    registerRateShieldFunctions(this.vm.getNativeFunctionRegistry());
   }
 
   /**

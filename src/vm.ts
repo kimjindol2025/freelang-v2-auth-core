@@ -729,6 +729,56 @@ export class VM {
             // CRITICAL FIX: Pass function parameters to IR generator for proper scoping
             const bodyIR = gen.generateIR(bodyNode, fn.params);
 
+            // Native-Rate-Shield: @rate_limit(window: Xms, max: N, burst: M) 처리
+            // annotation 형태: "rate_limit:window=1000,max=10,burst=10"
+            // 함수 실행 전에 Token Bucket 체크 → 차단 시 바디 스킵 + 429 반환
+            const rateLimitAnnot = fn.annotations?.find(
+              (a: string) => a === 'rate_limit' || a.startsWith('rate_limit:')
+            );
+            if (rateLimitAnnot && this.nativeFunctionRegistry.exists('shield_check')) {
+              const shieldKey = `__shield_${funcName}`;
+              // shield_init: 최초 1회만 실행 (idempotent)
+              if (this.nativeFunctionRegistry.exists('shield_init')) {
+                const paramStr = rateLimitAnnot.includes(':') ? rateLimitAnnot.slice(rateLimitAnnot.indexOf(':') + 1) : '';
+                const params: Record<string, number> = {};
+                paramStr.split(',').forEach(kv => {
+                  const [k, v] = kv.split('=');
+                  if (k && v) params[k.trim()] = Number(v.trim());
+                });
+                this.nativeFunctionRegistry.call('shield_init', [
+                  shieldKey,
+                  params['window'] ?? 1000,
+                  params['max']    ?? 10,
+                  params['burst']  ?? (params['max'] ?? 10),
+                ]);
+              }
+              // 클라이언트 키: 첫 번째 인자가 request map이면 IP 추출, 아니면 'global'
+              const reqArg = args[0];
+              let clientKey = 'global';
+              if (reqArg && typeof reqArg === 'object') {
+                clientKey = reqArg['x_forwarded_for']
+                  ?? reqArg['remote_addr']
+                  ?? reqArg['ip']
+                  ?? 'global';
+              }
+              const allowed = this.nativeFunctionRegistry.call('shield_check', [shieldKey, clientKey]);
+              if (!allowed) {
+                returnValue = {
+                  __rate_limited: true,
+                  status:  429,
+                  headers: { 'Retry-After': '1', 'X-Rate-Limit-By': 'native-rate-shield' },
+                  body:    'Too Many Requests',
+                };
+                // 바디 실행 스킵 → vars 복원 후 리턴
+                this.vars = savedVars;
+                if (returnValue !== undefined) this.stack.push(returnValue);
+                this.functionRegistry!.trackCall(funcName);
+                if (funcName) trackFunctionCall(funcName);
+                this.pc++;
+                break; // inner switch case 탈출
+              }
+            }
+
             // Self-Monitoring Kernel: @monitor 어노테이션 → 실행 레벨 주입
             // IR 레벨 삽입 대신 runProgram 전후에 직접 enter/exit 호출
             // → JMP 절대 주소가 깨지는 문제 원천 방지
