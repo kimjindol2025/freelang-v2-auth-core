@@ -12,26 +12,26 @@
  *   app.listen(3000)
  */
 
-// ============================================
-// Request Object (확장된 버전)
-// ============================================
+# ============================================
+# Request Object (확장된 버전)
+# ============================================
 struct Request {
-  method: string,        // GET, POST, PUT, DELETE, etc
-  path: string,          // /api/users
-  url: string,           // /api/users?id=1
-  query: map,            // { id: "1" }
-  params: map,           // { userId: "123" } for /users/:userId
-  headers: map,          // { "content-type": "application/json" }
-  body: string,          // Raw body
-  parsedBody: any,       // JSON parsed body
-  cookies: map,          // { "sessionId": "abc123" }
-  ip: string,            // Client IP
-  userAgent: string      // User-Agent header
+  method: string,
+  path: string,
+  url: string,
+  query: map,
+  params: map,
+  headers: map,
+  body: string,
+  parsedBody: any,
+  cookies: map,
+  ip: string,
+  userAgent: string
 }
 
-// ============================================
-// Response Object (빌더 패턴)
-// ============================================
+# ============================================
+# Response Object (빌더 패턴)
+# ============================================
 struct Response {
   status: int,
   headers: map,
@@ -40,40 +40,40 @@ struct Response {
   isSent: bool
 }
 
-// ============================================
-// Middleware Type
-// ============================================
-type Middleware = fn(Request, Response) -> bool  // true = next, false = stop
+# ============================================
+# Middleware Type
+# ============================================
+type Middleware = fn(Request, Response) -> bool
 
-// ============================================
-// Route Handler Type
-// ============================================
+# ============================================
+# Route Handler Type
+# ============================================
 type RouteHandler = fn(Request, Response) -> void
 
-// ============================================
-// Router 내부 구조
-// ============================================
+# ============================================
+# Router 내부 구조
+# ============================================
 struct Route {
   method: string,
   path: string,
   handler: RouteHandler,
-  regex: string    // 정규표현식 패턴 (경로 파라미터 처리용)
+  regex: string    # 정규표현식 패턴 (경로 파라미터 처리용)
 }
 
-// ============================================
-// Express App (메인 애플리케이션)
-// ============================================
+# ============================================
+# Express App (메인 애플리케이션)
+# ============================================
 struct App {
-  routes: array,         // Route[]
-  middlewares: array,    // Middleware[]
+  routes: array,         # Route[]
+  middlewares: array,    # Middleware[]
   port: int,
   isListening: bool,
   errorHandler: fn(any, Request, Response) -> void
 }
 
-// ============================================
-// App 생성
-// ============================================
+# ============================================
+# App 생성
+# ============================================
 fn createApp() -> App {
   return {
     routes: [],
@@ -86,13 +86,13 @@ fn createApp() -> App {
   }
 }
 
-// ============================================
-// 경로 파라미터 추출 헬퍼
-// ============================================
+# ============================================
+# 경로 파라미터 추출 헬퍼
+# ============================================
 fn parsePathParams(pattern: string, actualPath: string) -> map {
   let params = {}
 
-  // 간단한 구현: /users/:id 패턴 처리
+  # 간단한 구현: /users/:id 패턴 처리
   let patternParts = str.split(pattern, "/")
   let pathParts = str.split(actualPath, "/")
 
@@ -100,7 +100,7 @@ fn parsePathParams(pattern: string, actualPath: string) -> map {
   while i < patternParts.length {
     let part = patternParts[i]
     if str.starts_with(part, ":") {
-      let paramName = str.substring(part, 1)  // : 제거
+      let paramName = str.substring(part, 1)  # : 제거
       if i < pathParts.length {
         params[paramName] = pathParts[i]
       }
@@ -111,9 +111,9 @@ fn parsePathParams(pattern: string, actualPath: string) -> map {
   return params
 }
 
-// ============================================
-// 경로 매칭 (와일드카드 지원)
-// ============================================
+# ============================================
+# 경로 매칭 (와일드카드 지원)
+# ============================================
 fn matchPath(pattern: string, actualPath: string) -> bool {
   if pattern == actualPath {
     return true
@@ -141,9 +141,9 @@ fn matchPath(pattern: string, actualPath: string) -> bool {
   return true
 }
 
-// ============================================
-// 라우트 등록 (내부)
-// ============================================
+# ============================================
+# 라우트 등록 (내부)
+# ============================================
 fn registerRoute(app: App, method: string, path: string, handler: RouteHandler) -> void {
   let route: Route = {
     method: method,
@@ -154,65 +154,65 @@ fn registerRoute(app: App, method: string, path: string, handler: RouteHandler) 
   app.routes.push(route)
 }
 
-// ============================================
-// GET 라우트
-// ============================================
+# ============================================
+# GET 라우트
+# ============================================
 fn get(app: App, path: string, handler: RouteHandler) -> App {
   registerRoute(app, "GET", path, handler)
-  return app  // 체인 가능
+  return app  # 체인 가능
 }
 
-// ============================================
-// POST 라우트
-// ============================================
+# ============================================
+# POST 라우트
+# ============================================
 fn post(app: App, path: string, handler: RouteHandler) -> App {
   registerRoute(app, "POST", path, handler)
   return app
 }
 
-// ============================================
-// PUT 라우트
-// ============================================
+# ============================================
+# PUT 라우트
+# ============================================
 fn put(app: App, path: string, handler: RouteHandler) -> App {
   registerRoute(app, "PUT", path, handler)
   return app
 }
 
-// ============================================
-// DELETE 라우트
-// ============================================
+# ============================================
+# DELETE 라우트
+# ============================================
 fn delete(app: App, path: string, handler: RouteHandler) -> App {
   registerRoute(app, "DELETE", path, handler)
   return app
 }
 
-// ============================================
-// 범용 라우트 (메서드 지정)
-// ============================================
+# ============================================
+# 범용 라우트 (메서드 지정)
+# ============================================
 fn on(app: App, method: string, path: string, handler: RouteHandler) -> App {
   registerRoute(app, method, path, handler)
   return app
 }
 
-// ============================================
-// 미들웨어 등록
-// ============================================
+# ============================================
+# 미들웨어 등록
+# ============================================
 fn use(app: App, middleware: Middleware) -> App {
   app.middlewares.push(middleware)
   return app
 }
 
-// ============================================
-// 에러 핸들러
-// ============================================
+# ============================================
+# 에러 핸들러
+# ============================================
 fn errorHandler(app: App, handler: fn(any, Request, Response) -> void) -> App {
   app.errorHandler = handler
   return app
 }
 
-// ============================================
-// 요청 처리 (라우팅 및 미들웨어)
-// ============================================
+# ============================================
+# 요청 처리 (라우팅 및 미들웨어)
+# ============================================
 fn handleRequest(app: App, req: Request) -> Response {
   let res: Response = {
     status: 200,
@@ -222,12 +222,12 @@ fn handleRequest(app: App, req: Request) -> Response {
     isSent: false
   }
 
-  // 1. 미들웨어 실행
+  # 1. 미들웨어 실행
   let i = 0
   while i < arr.length(app.middlewares) {
     let middleware = app.middlewares[i]
     if !middleware(req, res) {
-      // 미들웨어가 요청을 중단했으면 여기서 반환
+      # 미들웨어가 요청을 중단했으면 여기서 반환
       if res.isSent {
         return res
       }
@@ -235,17 +235,17 @@ fn handleRequest(app: App, req: Request) -> Response {
     i = i + 1
   }
 
-  // 2. 라우트 찾기
+  # 2. 라우트 찾기
   let routeFound = false
   let j = 0
   while j < arr.length(app.routes) {
     let route = app.routes[j]
 
     if route.method == req.method && matchPath(route.path, req.path) {
-      // 경로 파라미터 추출
+      # 경로 파라미터 추출
       req.params = parsePathParams(route.path, req.path)
 
-      // 3. 핸들러 실행
+      # 3. 핸들러 실행
       route.handler(req, res)
       routeFound = true
       break
@@ -254,13 +254,13 @@ fn handleRequest(app: App, req: Request) -> Response {
     j = j + 1
   }
 
-  // 4. 라우트를 찾지 못했으면 404 반환
+  # 4. 라우트를 찾지 못했으면 404 반환
   if !routeFound {
     res.status = 404
     res.jsonData = { error: "Not Found" }
   }
 
-  // 5. jsonData가 설정되었으면 body로 변환
+  # 5. jsonData가 설정되었으면 body로 변환
   if res.jsonData != null {
     res.body = json.stringify(res.jsonData)
   }
@@ -268,23 +268,23 @@ fn handleRequest(app: App, req: Request) -> Response {
   return res
 }
 
-// ============================================
-// Response 헬퍼 메서드들
-// ============================================
+# ============================================
+# Response 헬퍼 메서드들
+# ============================================
 
-// 상태 코드 설정 (체인 가능)
+# 상태 코드 설정 (체인 가능)
 fn setStatus(res: Response, code: int) -> Response {
   res.status = code
   return res
 }
 
-// 헤더 설정
+# 헤더 설정
 fn setHeader(res: Response, key: string, value: string) -> Response {
   res.headers[key] = value
   return res
 }
 
-// JSON 응답 (체인 가능)
+# JSON 응답 (체인 가능)
 fn respondJson(res: Response, data: any) -> Response {
   res.jsonData = data
   res.headers["Content-Type"] = "application/json"
@@ -293,7 +293,7 @@ fn respondJson(res: Response, data: any) -> Response {
   return res
 }
 
-// 텍스트 응답
+# 텍스트 응답
 fn respondText(res: Response, text: string) -> Response {
   res.headers["Content-Type"] = "text/plain"
   res.body = text
@@ -301,7 +301,7 @@ fn respondText(res: Response, text: string) -> Response {
   return res
 }
 
-// HTML 응답
+# HTML 응답
 fn respondHtml(res: Response, html: string) -> Response {
   res.headers["Content-Type"] = "text/html"
   res.body = html
@@ -309,7 +309,7 @@ fn respondHtml(res: Response, html: string) -> Response {
   return res
 }
 
-// 리다이렉트 (상태코드 302)
+# 리다이렉트 (상태코드 302)
 fn redirect(res: Response, url: string) -> Response {
   res.status = 302
   res.headers["Location"] = url
@@ -318,7 +318,7 @@ fn redirect(res: Response, url: string) -> Response {
   return res
 }
 
-// 파일 응답
+# 파일 응답
 fn sendFile(res: Response, filePath: string) -> Response {
   let content = file.read(filePath)
   res.headers["Content-Type"] = "application/octet-stream"
@@ -327,18 +327,18 @@ fn sendFile(res: Response, filePath: string) -> Response {
   return res
 }
 
-// 상태코드만 전송
+# 상태코드만 전송
 fn send(res: Response, code: int) -> Response {
   res.status = code
   res.isSent = true
   return res
 }
 
-// ============================================
-// Request 헬퍼 함수
-// ============================================
+# ============================================
+# Request 헬퍼 함수
+# ============================================
 
-// body 파싱 (JSON)
+# body 파싱 (JSON)
 fn parseJson(req: Request) -> any {
   if req.body != "" {
     req.parsedBody = json.parse(req.body)
@@ -346,29 +346,29 @@ fn parseJson(req: Request) -> any {
   return req.parsedBody
 }
 
-// Query 파라미터 추출
+# Query 파라미터 추출
 fn getQuery(req: Request, key: string) -> string {
   return req.query[key]
 }
 
-// Path 파라미터 추출
+# Path 파라미터 추출
 fn getParam(req: Request, key: string) -> string {
   return req.params[key]
 }
 
-// 헤더 추출
+# 헤더 추출
 fn getHeader(req: Request, key: string) -> string {
   return req.headers[str.lower(key)]
 }
 
-// 쿠키 추출
+# 쿠키 추출
 fn getCookie(req: Request, name: string) -> string {
   return req.cookies[name]
 }
 
-// ============================================
-// 서버 시작
-// ============================================
+# ============================================
+# 서버 시작
+# ============================================
 fn listen(app: App, port: int) -> void {
   app.port = port
   app.isListening = true
@@ -377,8 +377,8 @@ fn listen(app: App, port: int) -> void {
   println("[Express-Compat] Routes registered:", arr.length(app.routes))
   println("[Express-Compat] Middlewares:", arr.length(app.middlewares))
 
-  // 실제 HTTP 서버 시작 (내부 VM이 처리)
-  // 간단한 예시로 로그만 출력
+  # 실제 HTTP 서버 시작 (내부 VM이 처리)
+  # 간단한 예시로 로그만 출력
   let i = 0
   while i < arr.length(app.routes) {
     let route = app.routes[i]
@@ -387,19 +387,19 @@ fn listen(app: App, port: int) -> void {
   }
 }
 
-// ============================================
-// 서버 종료
-// ============================================
+# ============================================
+# 서버 종료
+# ============================================
 fn close(app: App) -> void {
   app.isListening = false
   println("[Express-Compat] Server closed")
 }
 
-// ============================================
-// 편의 함수들
-// ============================================
+# ============================================
+# 편의 함수들
+# ============================================
 
-// 정적 파일 서빙
+# 정적 파일 서빙
 fn serveStatic(app: App, path: string, rootDir: string) -> App {
   return get(app, path, fn(req: Request, res: Response) {
     let filePath = rootDir + req.path
@@ -407,9 +407,9 @@ fn serveStatic(app: App, path: string, rootDir: string) -> App {
   })
 }
 
-// ============================================
-// Export
-// ============================================
+# ============================================
+# Export
+# ============================================
 export {
   Request,
   Response,

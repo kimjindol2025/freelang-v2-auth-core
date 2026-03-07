@@ -215,8 +215,14 @@ export class VM {
 
     // LOAD: common variable access
     if (op === Op.LOAD) {
-      const v = this.vars.get(inst.arg as string);
-      if (v === undefined) throw new Error('undef_var:' + inst.arg);
+      const varName = inst.arg as string;
+      const v = this.vars.get(varName);
+      if (process.env.DEBUG_STORE) {
+        console.log(`[DEBUG LOAD] Getting vars["${varName}"]`);
+        console.log(`[DEBUG LOAD] vars keys available:`, Array.from(this.vars.keys()));
+        console.log(`[DEBUG LOAD] Result:`, v);
+      }
+      if (v === undefined) throw new Error('undef_var:' + varName);
       this.guardStack();
       this.stack.push(v);
       this.pc++;
@@ -226,7 +232,17 @@ export class VM {
     // STORE: common variable assignment
     if (op === Op.STORE) {
       this.need(1);
-      this.vars.set(inst.arg as string, this.stack.pop()!);
+      const varName = inst.arg as string;
+      const value = this.stack.pop()!;
+      if (process.env.DEBUG_STORE) {
+        console.log(`[DEBUG STORE] Setting vars["${varName}"] = ${JSON.stringify(value)}`);
+        console.log(`[DEBUG STORE] vars keys before:`, Array.from(this.vars.keys()));
+      }
+      this.vars.set(varName, value);
+      if (process.env.DEBUG_STORE) {
+        console.log(`[DEBUG STORE] vars keys after:`, Array.from(this.vars.keys()));
+        console.log(`[DEBUG STORE] vars["${varName}"] =`, this.vars.get(varName));
+      }
       this.pc++;
       return;
     }
@@ -438,19 +454,29 @@ export class VM {
       }
 
       case Op.ARR_LEN: {
-        let arr;
+        let value;
         if (arg) {
-          // Variable-based: arr = this.vars.get(arg)
-          arr = this.vars.get(arg as string);
-          if (!Array.isArray(arr)) throw new Error('not_array:' + arg);
+          // Variable-based: value = this.vars.get(arg)
+          value = this.vars.get(arg as string);
         } else {
-          // Stack-based: pop array from stack
+          // Stack-based: pop value from stack
           this.need(1);
-          arr = this.stack.pop();
-          if (!Array.isArray(arr)) throw new Error('not_array:stack_array');
+          value = this.stack.pop();
         }
+
+        // Support both arrays and strings
+        if (value === null || value === undefined) {
+          throw new Error('length_on_null');
+        }
+
+        // Get length property - works for arrays and strings
+        const len = (value as any).length;
+        if (typeof len !== 'number') {
+          throw new Error('no_length_property');
+        }
+
         this.guardStack();
-        this.stack.push(arr.length);
+        this.stack.push(len);
         this.pc++;
         break;
       }
@@ -627,7 +653,8 @@ export class VM {
                 bodyNode.type = 'block';
               }
 
-              const bodyIR = gen.generateIR(bodyNode);
+              // Pass function parameters as local scope to IR generator
+              const bodyIR = gen.generateIR(bodyNode, fn.params);
 
               if (process.env.DEBUG_FUNC_BODY) {
                 console.log(`[DEBUG] Async Function ${funcName} body IR (${bodyIR.length} instructions):`);
@@ -682,6 +709,15 @@ export class VM {
 
             // Generate IR for the entire block (all statements at once)
             const bodyIR = gen.generateIR(bodyNode);
+
+            // DEBUG: Log generated IR
+            if (process.env.DEBUG_STORE) {
+              console.log(`\n[DEBUG] Function ${funcName} body IR (${bodyIR.length} instructions):`);
+              bodyIR.forEach((inst, idx) => {
+                const opName = Object.entries(Op).find(([_, v]) => v === inst.op)?.[0] || `Op(${inst.op})`;
+                console.log(`  [${idx}] ${opName} ${inst.arg !== undefined ? inst.arg : ''}`);
+              });
+            }
 
             // DEBUG: Log bodyIR for inspection
             if (process.env.DEBUG_FUNC_BODY) {

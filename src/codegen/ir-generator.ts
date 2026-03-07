@@ -27,12 +27,16 @@ export class IRGenerator {
   private indexVarCounter = 0;  // For generating unique index variables
   private tempVarCounter = 0;   // For generating temporary array variables
   private moduleLinkContext?: ModuleLinkContext;  // Phase 4 Step 5: Module linking
+  private localScope: Set<string> = new Set();  // Function parameter scope tracking
 
   /**
    * AST → IR instructions
    * Example: BinaryOp('+', 1, 2) → [PUSH 1, PUSH 2, ADD, HALT]
+   *
+   * @param ast AST node to compile
+   * @param localScope Optional array of parameter names for function scope
    */
-  generateIR(ast: ASTNode): Inst[] {
+  generateIR(ast: ASTNode, localScope?: string[]): Inst[] {
     const instructions: Inst[] = [];
 
     if (!ast) {

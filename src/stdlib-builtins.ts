@@ -490,6 +490,13 @@ export function registerStdlibFunctions(registry: NativeFunctionRegistry): void 
     executor: () => Date.now()
   });
 
+  // time() - Unix timestamp in seconds (Phase 2: Zero-Dependency Support)
+  registry.register({
+    name: 'time',
+    module: 'os',
+    executor: () => Math.floor(Date.now() / 1000)
+  });
+
   registry.register({
     name: 'os_exit',
     module: 'os',
