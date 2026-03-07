@@ -76,7 +76,10 @@ import {
   StyleProperty,      // MOSS-Style: 스타일 속성
   TestBlock,          // Self-Testing Compiler: 내장 테스트 블록
   AssertStatement,    // Self-Testing Compiler: expect 어서션
-  LintConfig          // Native-Linter: @lint(...) 어노테이션
+  LintConfig,         // Native-Linter: @lint(...) 어노테이션
+  TypeAliasDeclaration,   // Reified-Type-System: type X = A | B
+  StaticAssertDeclaration, // Reified-Type-System: @static_assert_size<T, N>
+  GenericTypeParam        // Reified-Type-System: 제네릭 타입 파라미터
 } from './ast';
 
 /**
@@ -1291,6 +1294,13 @@ export class Parser {
       type += '>';
     }
 
+    // Reified-Type-System: Nullable type → string? = string | null
+    // T? 는 "T | null"로 내부 정규화됨
+    if (this.check(TokenType.QUESTION)) {
+      this.advance(); // ?
+      type = type + '?';  // 'string?' 형태로 보존 (ReifiedTypeRegistry가 해석)
+    }
+
     return type;
   }
 
@@ -1578,6 +1588,12 @@ export class Parser {
     // Phase 16: enum 선언
     if (this.check(TokenType.ENUM)) {
       return this.parseEnumDeclaration();
+    }
+
+    // Reified-Type-System: type 별칭 선언
+    // type UserID = int | string
+    if (this.check(TokenType.TYPE)) {
+      return this.parseTypeAliasDeclaration();
     }
 
     // Phase I: try 문
@@ -2129,6 +2145,34 @@ export class Parser {
     const nameToken = this.expect(TokenType.IDENT, 'Expected struct name');
     const name = nameToken.value;
 
+    // Reified-Type-System: 제네릭 파라미터 파싱
+    // struct User<T> { ... }  또는  struct Map<K, V: Comparable> { ... }
+    let typeParams: GenericTypeParam[] | undefined;
+    if (this.check(TokenType.LT)) {
+      this.advance(); // <
+      typeParams = [];
+
+      while (!this.check(TokenType.GT) && !this.check(TokenType.EOF)) {
+        const paramNameToken = this.expect(TokenType.IDENT, 'Expected type parameter name');
+        const paramName = paramNameToken.value;
+
+        // 제약 조건: T: Printable
+        let constraint: string | undefined;
+        if (this.check(TokenType.COLON)) {
+          this.advance(); // :
+          constraint = this.expect(TokenType.IDENT, 'Expected type constraint').value;
+        }
+
+        typeParams.push({ name: paramName, constraint });
+
+        if (this.check(TokenType.COMMA)) {
+          this.advance(); // ,
+        }
+      }
+
+      this.expect(TokenType.GT, 'Expected ">" after type parameters');
+    }
+
     this.expect(TokenType.LBRACE, 'Expected "{"');
 
     const fields: Array<{ name: string; fieldType?: string }> = [];
@@ -2165,7 +2209,60 @@ export class Parser {
     return {
       type: 'struct',
       name,
+      ...(typeParams && { typeParams }),
       fields
+    };
+  }
+
+  /**
+   * Reified-Type-System: 타입 별칭 선언 파싱
+   *
+   * 지원 형식:
+   *   type UserID = int | string
+   *   type Callback = fn(int) -> bool
+   *   type Point = struct { x: number, y: number }
+   */
+  private parseTypeAliasDeclaration(): TypeAliasDeclaration {
+    const startToken = this.current();
+    this.expect(TokenType.TYPE, 'Expected "type"');
+
+    const aliasToken = this.expect(TokenType.IDENT, 'Expected type alias name');
+    const alias = aliasToken.value;
+
+    this.expect(TokenType.ASSIGN, 'Expected "=" in type alias declaration');
+
+    // 정의 파싱: 현재 토큰부터 줄끝 또는 세미콜론까지 수집
+    const definitionParts: string[] = [];
+    let isUnion = false;
+    const members: string[] = [];
+
+    // 첫 번째 타입 파싱
+    const firstType = this.parseType();
+    definitionParts.push(firstType);
+    members.push(firstType);
+
+    // 유니온 멤버 파싱: type X = A | B | C
+    while (this.check(TokenType.BIT_OR)) {
+      isUnion = true;
+      this.advance(); // |
+      const memberType = this.parseType();
+      definitionParts.push(memberType);
+      members.push(memberType);
+    }
+
+    const definition = definitionParts.join(' | ');
+
+    // 선택적 세미콜론
+    this.match(TokenType.SEMICOLON);
+
+    return {
+      type: 'typeAlias',
+      alias,
+      definition,
+      isUnion,
+      members: isUnion ? members : undefined,
+      line: startToken.line,
+      column: startToken.column
     };
   }
 

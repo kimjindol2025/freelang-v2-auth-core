@@ -413,6 +413,10 @@ export class OptimizationDetector {
       [Op.THROW]: 'THROW',
       [Op.STORE_SECRET]: 'STORE_SECRET',
       [Op.LOAD_SECRET]: 'LOAD_SECRET',
+      [Op.TYPE_DECL]: 'TYPE_DECL',
+      [Op.NULL_CHECK]: 'NULL_CHECK',
+      [Op.STATIC_ASSERT]: 'STATIC_ASSERT',
+      [Op.GENERIC_INST]: 'GENERIC_INST',
       [Op.DUMP]: 'DUMP',
     };
 

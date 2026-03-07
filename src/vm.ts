@@ -657,11 +657,11 @@ export class VM {
               }
 
               // Pass function parameters as local scope to IR generator
-              let bodyIR = gen.generateIR(bodyNode, fn.params);
+              const bodyIR = gen.generateIR(bodyNode, fn.params);
 
-              // Self-Monitoring Kernel: @monitor 어노테이션 → async 함수에도 주입
-              if (fn.annotations && fn.annotations.includes('monitor')) {
-                bodyIR = gen.wrapWithMonitoring(bodyIR, funcName);
+              const isMonitoredAsync = fn.annotations && fn.annotations.includes('monitor');
+              if (isMonitoredAsync && this.nativeFunctionRegistry.exists('insight_enter')) {
+                this.nativeFunctionRegistry.call('insight_enter', [funcName]);
               }
 
               if (process.env.DEBUG_FUNC_BODY) {
@@ -674,6 +674,10 @@ export class VM {
 
               const bodyResult = this.runProgram(bodyIR);
               returnValue = bodyResult.value;
+
+              if (isMonitoredAsync && this.nativeFunctionRegistry.exists('insight_exit')) {
+                this.nativeFunctionRegistry.call('insight_exit', [funcName]);
+              }
 
               // Restore caller's variables
               this.vars = savedVars;
@@ -717,11 +721,17 @@ export class VM {
 
             // Generate IR for the entire block (all statements at once)
             // CRITICAL FIX: Pass function parameters to IR generator for proper scoping
-            let bodyIR = gen.generateIR(bodyNode, fn.params);
+            const bodyIR = gen.generateIR(bodyNode, fn.params);
 
-            // Self-Monitoring Kernel: @monitor 어노테이션 → insight_enter/exit 주입
-            if (fn.annotations && fn.annotations.includes('monitor')) {
-              bodyIR = gen.wrapWithMonitoring(bodyIR, funcName);
+            // Self-Monitoring Kernel: @monitor 어노테이션 → 실행 레벨 주입
+            // IR 레벨 삽입 대신 runProgram 전후에 직접 enter/exit 호출
+            // → JMP 절대 주소가 깨지는 문제 원천 방지
+            const isMonitored = fn.annotations && fn.annotations.includes('monitor');
+            if (isMonitored) {
+              const insightReg = this.nativeFunctionRegistry;
+              if (insightReg.exists('insight_enter')) {
+                insightReg.call('insight_enter', [funcName]);
+              }
             }
 
             // DEBUG: Log generated IR
@@ -747,6 +757,14 @@ export class VM {
             const bodyResult = this.runProgram(bodyIR);
             returnValue = bodyResult.value;
 
+            // Self-Monitoring Kernel: @monitor → 함수 종료 기록
+            if (isMonitored) {
+              const insightReg = this.nativeFunctionRegistry;
+              if (insightReg.exists('insight_exit')) {
+                insightReg.call('insight_exit', [funcName]);
+              }
+            }
+
             // Restore caller's variables
             this.vars = savedVars;
 
@@ -771,7 +789,10 @@ export class VM {
           const args: any[] = [];
           let paramCount = 0;
 
-          if (nativeFunc.signature) {
+          if (nativeFunc.paramCount !== undefined) {
+            // 명시적 paramCount 우선 (executor.length 오버라이드)
+            paramCount = nativeFunc.paramCount;
+          } else if (nativeFunc.signature) {
             paramCount = nativeFunc.signature.parameters.length;
           } else if (nativeFunc.executor) {
             // Use function length if signature is not available

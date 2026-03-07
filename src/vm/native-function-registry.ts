@@ -15,6 +15,7 @@ export interface NativeFunctionConfig {
   executor?: (args: any[]) => any;          // 실행 함수 (옵션)
   async?: boolean;                           // 비동기 여부
   callbackId?: number;                       // 콜백 ID
+  paramCount?: number;                       // 명시적 파라미터 수 (executor.length 오버라이드)
 }
 
 /**

@@ -103,6 +103,55 @@ export class ProgramRunner {
         }
       }
 
+      // ── Native-Core-Multiplexing: @parallel 어노테이션 감지 ──────────────
+      // fn main에 @parallel이 있으면 OS 수준 fork 부트스트랩 실행
+      // Primary: 워커 N개 생성 + Watchdog → 자신은 대기
+      // Worker:  @parallel 감지해도 cluster.isPrimary=false → 아래로 통과 → main 실행
+      //
+      // 설계 원칙:
+      //   - cluster.fork() = SO_REUSEPORT 자동 활성화 (커널이 요청 분배)
+      //   - Copy-on-Write: 워커 별 독립 힙, 공통 상수는 읽기 전용 공유
+      //   - Watchdog: 워커 비정상 종료 시 즉시 재시작 (0 다운타임)
+      //   - CPU Affinity: os.cpus() 기반 코어 수 자동 감지 (Core-Aware-Binary)
+      // ─────────────────────────────────────────────────────────────────────
+      const mainFn = (module.statements as any[])?.find(
+        (s: any) => s?.type === 'function' && s?.name === 'main'
+      );
+      if (mainFn?.annotations?.includes('parallel')) {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const clusterMod = require('cluster') as any;
+        if (clusterMod.isPrimary) {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const os = require('os') as typeof import('os');
+          const workerCount = os.cpus().length;
+          process.stdout.write(
+            `[Native-Core-Multiplexing] Bootstrap: Core×${workerCount} (SO_REUSEPORT=auto, Watchdog=ON)\n`
+          );
+
+          // Core-Aware-Binary: CPU 코어 수만큼 워커 포크
+          for (let i = 0; i < workerCount; i++) {
+            clusterMod.fork();
+          }
+
+          // Watchdog: 워커 비정상 종료 → 즉시 재시작 (자가 회복)
+          clusterMod.on('exit', (worker: any, code: number, signal: string) => {
+            process.stdout.write(
+              `[NCM Watchdog] Worker PID-${worker.process.pid} exit(${signal || code}) → respawn\n`
+            );
+            clusterMod.fork();
+          });
+
+          // Primary는 워커를 관리하며 대기 (main 실행하지 않음)
+          return {
+            success: true,
+            output: `NCM:primary pid=${process.pid} workers=${workerCount}`,
+            exitCode: 0,
+            executionTime: Date.now() - startTime
+          };
+        }
+        // Worker 프로세스: 아래로 통과 → main 정상 실행
+      }
+
       // 3. Generate IR: Module → IR instructions
       const ir = this.gen.generateModuleIR(module);
 

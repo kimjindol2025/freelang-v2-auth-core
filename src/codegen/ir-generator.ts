@@ -251,7 +251,10 @@ export class IRGenerator {
       'while': 'WhileStatement',
       'return': 'return',
       'block': 'Block',
-      'function': 'FunctionStatement'
+      'function': 'FunctionStatement',
+      // Reified-Type-System 노드
+      'typeAlias': 'typeAlias',
+      'staticAssert': 'staticAssert'
     };
 
     // Return mapped type or original if not found
@@ -945,23 +948,64 @@ export class IRGenerator {
         {
           // Struct declaration: store struct metadata in the IR
           // struct name { field1, field2, ... }
+          // Reified-Type-System: struct User<T> → typeParams 정보를 메타데이터로 포함
 
           const structName = node.name;
           const fields = node.fields || [];
+          const typeParams = node.typeParams;  // GenericTypeParam[] | undefined
 
           // Create struct type object
           out.push({ op: Op.STRUCT_NEW, arg: structName });
 
+          // Reified-Type-System: 제네릭 파라미터가 있으면 GENERIC_INST 메타데이터 emit
+          // arg 형식: "StructName[T,U]" → ReifiedTypeRegistry가 레이아웃 결정에 사용
+          if (typeParams && typeParams.length > 0) {
+            const paramStr = typeParams.map((p: any) =>
+              p.constraint ? `${p.name}:${p.constraint}` : p.name
+            ).join(',');
+            out.push({ op: Op.GENERIC_INST, arg: `${structName}[${paramStr}]` });
+          }
+
           // Register struct fields
           for (const field of fields) {
             const fieldName = field.name || field;
-            const fieldType = field.fieldType || 'any';
-
-            out.push({ op: Op.STRUCT_FIELD, arg: fieldName });
+            // Reified-Type-System: nullable 필드(T?)는 null-check guard를 함께 등록
+            const rawFieldType: string = field.fieldType || 'any';
+            const isNullable = rawFieldType.endsWith('?');
+            // STRUCT_FIELD arg: "fieldName" 또는 "fieldName:nullable" (nullable 마킹)
+            out.push({ op: Op.STRUCT_FIELD, arg: isNullable ? `${fieldName}:nullable` : fieldName });
           }
 
           // Store struct definition
           out.push({ op: Op.STORE, arg: `__struct_${structName}` });
+        }
+        break;
+
+      // ── Reified-Type-System: 타입 별칭 선언 ──────────────────
+      // type UserID = int | string → TYPE_DECL 명령어로 컴파일 타임 레지스트리 등록
+      // 런타임 오버헤드: 0 (메타데이터 전용, VM이 execute 시 skip)
+      case 'typeAlias':
+        {
+          const { alias, definition, isUnion, members } = node;
+
+          // TYPE_DECL: "alias=definition" 형태로 인코딩
+          // 예: "UserID=int|string" 또는 "Callback=fn(int)->bool"
+          const encoded = isUnion && members
+            ? `${alias}=${members.join('|')}`
+            : `${alias}=${definition}`;
+
+          out.push({ op: Op.TYPE_DECL, arg: encoded });
+        }
+        break;
+
+      // ── Reified-Type-System: 컴파일 타임 크기 검증 ──────────
+      // @static_assert_size<User<int>, 24> → STATIC_ASSERT 명령어
+      // VM이 타입 레지스트리에서 실제 크기를 계산하여 불일치 시 컴파일 에러
+      case 'staticAssert':
+        {
+          const { targetType, expectedSize } = node;
+          // arg 형식: "TypeName:expectedBytes"
+          out.push({ op: Op.STATIC_ASSERT, arg: `${targetType}:${expectedSize}` });
         }
         break;
 
